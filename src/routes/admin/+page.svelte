@@ -3,9 +3,58 @@
     import * as Table from "$lib/components/ui/table";
     import { Badge } from "$lib/components/ui/badge";
     import { Button } from "$lib/components/ui/button";
-    import { Activity, Server, Users, User, AlertCircle, Cpu } from "lucide-svelte";
+    import { Activity, Server, Users, User, AlertCircle, Cpu, X, Bot, Loader2 } from "lucide-svelte";
+    import { applyAction, deserialize } from '$app/forms';
+    import { ScrollArea } from "$lib/components/ui/scroll-area";
     
     let { data } = $props();
+
+    let isInspecting = $state(false);
+    let selectedSession = $state("");
+    let sessionHistory = $state<any[]>([]);
+    let isLoadingHistory = $state(false);
+    let historyError = $state("");
+
+    async function inspectSession(sessionId: string) {
+        selectedSession = sessionId;
+        isInspecting = true;
+        isLoadingHistory = true;
+        historyError = "";
+        sessionHistory = [];
+
+        const formData = new FormData();
+        formData.append('sessionId', sessionId);
+
+        try {
+            const response = await fetch('?/getHistory', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = deserialize(await response.text());
+            if (result.type === 'success' && result.data) {
+                const actionData = result.data as any;
+                if (actionData.error) {
+                    historyError = actionData.error;
+                } else {
+                    sessionHistory = actionData.history || [];
+                }
+            } else {
+                historyError = "Failed to fetch session history";
+            }
+        } catch (e: any) {
+            historyError = e.message || "An error occurred";
+        } finally {
+            isLoadingHistory = false;
+        }
+    }
+
+    function closeInspector() {
+        isInspecting = false;
+        selectedSession = "";
+        sessionHistory = [];
+        historyError = "";
+    }
 </script>
 
 <div class="container mx-auto py-8 px-4">
@@ -211,7 +260,13 @@
                                 <Table.Row>
                                     <Table.Cell class="font-mono text-xs">{sessionId}</Table.Cell>
                                     <Table.Cell class="text-right">
-                                        <Button variant="ghost" size="sm">Inspect</Button>
+                                        <Button 
+                                            variant="ghost" 
+                                            size="sm"
+                                            onclick={() => inspectSession(sessionId)}
+                                        >
+                                            Inspect
+                                        </Button>
                                     </Table.Cell>
                                 </Table.Row>
                             {/each}
@@ -280,4 +335,74 @@
             </div>
         </Card.Content>
     </Card.Root>
+
+    {#if isInspecting}
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true">
+            <Card.Root class="w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+                <Card.Header class="flex flex-row items-center justify-between border-b py-4">
+                    <div>
+                        <Card.Title class="text-xl">Session History</Card.Title>
+                        <Card.Description class="font-mono text-xs">{selectedSession}</Card.Description>
+                    </div>
+                    <Button variant="ghost" size="icon" onclick={closeInspector}>
+                        <X class="h-4 w-4" />
+                    </Button>
+                </Card.Header>
+                <Card.Content class="flex-1 overflow-hidden p-0">
+                    <div class="h-[60vh] flex flex-col bg-muted/20">
+                        {#if isLoadingHistory}
+                            <div class="flex-1 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                                <Loader2 class="h-8 w-8 animate-spin" />
+                                <p>Loading conversation history...</p>
+                            </div>
+                        {:else if historyError}
+                            <div class="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4">
+                                <AlertCircle class="h-12 w-12 text-destructive opacity-50" />
+                                <div class="space-y-2">
+                                    <h3 class="font-bold text-lg text-destructive">Error Loading History</h3>
+                                    <p class="text-sm text-muted-foreground max-w-md">{historyError}</p>
+                                </div>
+                                <Button variant="outline" onclick={() => inspectSession(selectedSession)}>Try Again</Button>
+                            </div>
+                        {:else if sessionHistory.length === 0}
+                            <div class="flex-1 flex flex-col items-center justify-center text-muted-foreground p-10 text-center">
+                                <Bot class="h-12 w-12 mb-4 opacity-20" />
+                                <p>This session has no recorded messages yet.</p>
+                            </div>
+                        {:else}
+                            <ScrollArea class="flex-1 p-4">
+                                <div class="space-y-6">
+                                    {#each sessionHistory as msg}
+                                        <div class="flex flex-col gap-2">
+                                            <div class="flex items-center gap-2">
+                                                <div class="h-6 w-6 rounded-full flex items-center justify-center shrink-0 
+                                                    {msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted border'}">
+                                                    {#if msg.role === 'user'}
+                                                        <User class="h-3 w-3" />
+                                                    {:else}
+                                                        <Bot class="h-3 w-3" />
+                                                    {/if}
+                                                </div>
+                                                <span class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                                    {msg.role}
+                                                </span>
+                                            </div>
+                                            <div class="pl-8">
+                                                <div class="rounded-lg px-4 py-3 text-sm border bg-card shadow-sm whitespace-pre-wrap">
+                                                    {msg.content}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {/each}
+                                </div>
+                            </ScrollArea>
+                        {/if}
+                    </div>
+                </Card.Content>
+                <Card.Footer class="border-t p-4 flex justify-end">
+                    <Button onclick={closeInspector}>Close</Button>
+                </Card.Footer>
+            </Card.Root>
+        </div>
+    {/if}
 </div>

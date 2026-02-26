@@ -43,3 +43,30 @@ export const load: PageServerLoad = async () => {
         };
     }
 };
+
+export const actions = {
+    getHistory: async ({ request }) => {
+        const data = await request.formData();
+        const sessionId = data.get('sessionId') as string;
+
+        if (!sessionId) {
+            return { error: 'Session ID is required' };
+        }
+
+        const api = new Api({
+            baseURL: PUBLIC_MIRI_SERVER_URL,
+            headers: {
+                'X-Server-Key': PUBLIC_MIRI_SERVER_KEY,
+                'Authorization': 'Basic ' + Buffer.from(`${MIRI_ADMIN_USER}:${MIRI_ADMIN_PASSWORD}`).toString('base64')
+            }
+        });
+
+        try {
+            const history = await api.api.adminV1SessionsHistoryList(sessionId);
+            return { history: history.data };
+        } catch (e: any) {
+            console.error(`Failed to fetch history for session ${sessionId}:`, e.message);
+            return { error: e.message || 'Could not fetch session history' };
+        }
+    }
+};
