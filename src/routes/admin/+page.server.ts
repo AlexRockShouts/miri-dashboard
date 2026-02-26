@@ -1,15 +1,15 @@
 // @ts-ignore
 import { Api } from '@miri/sdk/miri-sdk';
 import { error } from '@sveltejs/kit';
-import { PUBLIC_MIRI_SERVER_URL } from '$env/static/public';
-import { MIRI_ADMIN_USER, MIRI_ADMIN_PASSWORD, MIRI_SERVER_KEY } from '$env/static/private';
+import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
+import { MIRI_ADMIN_USER, MIRI_ADMIN_PASSWORD } from '$env/static/private';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
     const api = new Api({
         baseURL: PUBLIC_MIRI_SERVER_URL,
         headers: {
-            'X-Server-Key': MIRI_SERVER_KEY,
+            'X-Server-Key': PUBLIC_MIRI_SERVER_KEY,
             'Authorization': 'Basic ' + Buffer.from(`${MIRI_ADMIN_USER}:${MIRI_ADMIN_PASSWORD}`).toString('base64')
         }
     });

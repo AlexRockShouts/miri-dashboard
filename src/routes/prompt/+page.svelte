@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { PUBLIC_MIRI_SERVER_URL } from '$env/static/public';
-	// @ts-ignore
-	import { Api } from '@miri/sdk/miri-sdk';
+ import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
 	import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import * as Card from "$lib/components/ui/card";
@@ -24,6 +22,8 @@
     let useSSE = $state(false);
 
     function processMessage(data: string) {
+        if (!data) return;
+        
         // Miri's WebSocket/SSE might send JSON or raw text.
         let content = "";
         try {
@@ -34,6 +34,9 @@
                 content = parsed.response;
             } else if (typeof parsed === 'string') {
                 content = parsed;
+            } else if (parsed.error) {
+                console.error('Server error:', parsed.error);
+                content = `Error: ${parsed.error}`;
             }
         } catch (e) {
             // If not JSON, it might be raw string fragment
@@ -49,6 +52,9 @@
             } else {
                 messages.push({ role: 'assistant', content: currentAssistantMessage });
             }
+            
+            // Scroll to bottom on new content
+            setTimeout(scrollToBottom, 0);
         }
     }
 
@@ -62,27 +68,20 @@
 
 		const wsUrl = `${wsProtocol}//${wsBase}/ws?client_id=${clientId}&stream=true`;
 
-		// 1. Pre-authenticate using the SDK (sends X-Server-Key as an HTTP header).
-		// Many servers use this to authorize the IP or session for a short window.
-		try {
-			const api = new Api({ baseURL: serverUrl });
-			// The SDK's getWs method uses a GET request with headers.
-			await api.ws.getWs({}, {
-				headers: { 'X-Server-Key': data.miriServerKey }
-			});
-			console.log('Pre-auth GET successful');
-		} catch (e: any) {
-			console.warn('Pre-auth GET failed (expected if endpoint is WS-only), proceeding to WebSocket...', e.message);
-		}
-
-		// 2. Connect with sub-protocols as a way to pass the header in the Upgrade request.
+		// 1. Connect with sub-protocols as a way to pass the header in the Upgrade request.
 		// Browsers do not allow custom headers on native WebSockets, so we use
 		// the standard 'Sec-WebSocket-Protocol' header as a workaround.
 		// The middleware expects two sub-protocols: "miri-key" and the key itself.
 		// We ensure the key is passed as a separate token.
-		const protocols = ["miri-key", data.miriServerKey];
-		console.log('Connecting WebSocket with protocols:', protocols);
-		socket = new WebSocket(wsUrl, protocols);
+		const protocols = ["miri-key", PUBLIC_MIRI_SERVER_KEY];
+		console.log('Connecting WebSocket:', {
+            url: wsUrl,
+            protocols: protocols,
+            serverUrl: PUBLIC_MIRI_SERVER_URL,
+            serverKey: PUBLIC_MIRI_SERVER_KEY ? 'present' : 'missing'
+        });
+		const fullWsUrl = `${wsUrl}&token=${encodeURIComponent(PUBLIC_MIRI_SERVER_KEY || '')}`;
+		socket = new WebSocket(fullWsUrl, protocols);
 
 		socket.onopen = () => {
             console.log('WebSocket connected');
@@ -90,8 +89,9 @@
         };
 
         socket.onmessage = (event) => {
-            isWaiting = false;
             let data = event.data;
+            console.log('WS message received:', data);
+            isWaiting = false;
             
             // Handle binary data if it's sent as Blob/ArrayBuffer
             if (data instanceof Blob) {
@@ -107,7 +107,7 @@
 
 
         socket.onclose = (ev) => {
-            console.log('WebSocket disconnected', ev?.code, ev?.reason);
+            console.log('WebSocket disconnected', { code: ev?.code, reason: ev?.reason, wasClean: ev?.wasClean });
             isConnected = false;
             // If we never connected successfully, enable SSE fallback
             if (!useSSE && (!ev || ev.code >= 400 || ev.code === 1006)) {
@@ -178,7 +178,7 @@
                 method: 'GET',
                 headers: {
                     'Accept': 'text/event-stream',
-                    'X-Server-Key': data.miriServerKey
+                    'X-Server-Key': PUBLIC_MIRI_SERVER_KEY
                 }
             });
 
@@ -302,12 +302,12 @@
             >
                 <Input 
                     type="text" 
-                    placeholder={isConnected ? "Type your prompt here..." : "Connecting..."}
+                    placeholder={isConnected ? "Type your prompt here..." : useSSE ? "Type your prompt here (via SSE)..." : "Connecting..."}
                     bind:value={inputMessage}
-                    disabled={!isConnected}
+                    disabled={isWaiting}
                     autocomplete="off"
                 />
-                <Button type="submit" size="icon" disabled={!isConnected || !inputMessage.trim()}>
+                <Button type="submit" size="icon" disabled={isWaiting || !inputMessage.trim()}>
                     <Send class="h-4 w-4" />
                     <span class="sr-only">Send</span>
                 </Button>

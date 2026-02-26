@@ -1,8 +1,8 @@
-import { MIRI_SERVER_KEY } from '$env/static/private';
+import { PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
     return {
-        miriServerKey: MIRI_SERVER_KEY
+        miriServerKey: PUBLIC_MIRI_SERVER_KEY
     };
 };
