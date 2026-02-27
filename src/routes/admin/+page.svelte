@@ -3,15 +3,18 @@
     import * as Table from "$lib/components/ui/table";
     import { Badge } from "$lib/components/ui/badge";
     import { Button } from "$lib/components/ui/button";
-    import { Activity, Server, Users, User, AlertCircle, Cpu, X, Bot, Loader2 } from "lucide-svelte";
+    import { Activity, Server, Users, User, AlertCircle, Cpu, X, Bot, Loader2, Download, Trash2, Calendar, Clock, CheckCircle2 } from "lucide-svelte";
     import { applyAction, deserialize } from '$app/forms';
     import { ScrollArea } from "$lib/components/ui/scroll-area";
+    import { invalidateAll } from '$app/navigation';
+    import type { Message } from "@miri/sdk";
+    import type { PageData as AdminData } from "./$types";
     
-    let { data } = $props();
+    let { data } = $props() as { data: AdminData };
 
     let isInspecting = $state(false);
     let selectedSession = $state("");
-    let sessionHistory = $state<any[]>([]);
+    let sessionHistory = $state<Message[]>([]);
     let isLoadingHistory = $state(false);
     let historyError = $state("");
 
@@ -22,6 +25,8 @@
         historyError = "";
         sessionHistory = [];
 
+        console.log(`Inspecting session: ${sessionId}`);
+
         const formData = new FormData();
         formData.append('sessionId', sessionId);
 
@@ -31,7 +36,13 @@
                 body: formData
             });
 
-            const result = deserialize(await response.text());
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+            }
+
+            const text = await response.text();
+            console.log('Action response received');
+            const result = deserialize(text);
             if (result.type === 'success' && result.data) {
                 const actionData = result.data as any;
                 if (actionData.error) {
@@ -98,7 +109,7 @@
         </Card.Root>
     {/if}
 
-    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
         <Card.Root>
             <Card.Header class="flex flex-row items-center justify-between pb-2">
                 <Card.Title class="text-sm font-medium">Server Status</Card.Title>
@@ -145,6 +156,17 @@
 
         <Card.Root>
             <Card.Header class="flex flex-row items-center justify-between pb-2">
+                <Card.Title class="text-sm font-medium">Scheduled Tasks</Card.Title>
+                <Calendar class="h-4 w-4 text-muted-foreground" />
+            </Card.Header>
+            <Card.Content>
+                <div class="text-2xl font-bold">{data.tasks?.length || 0}</div>
+                <p class="text-xs text-muted-foreground mt-1">Automated recurring tasks</p>
+            </Card.Content>
+        </Card.Root>
+
+        <Card.Root>
+            <Card.Header class="flex flex-row items-center justify-between pb-2">
                 <Card.Title class="text-sm font-medium">Models Mode</Card.Title>
                 <Server class="h-4 w-4 text-muted-foreground" />
             </Card.Header>
@@ -158,34 +180,42 @@
     <div class="grid gap-6 md:grid-cols-2 mb-8">
         <Card.Root>
             <Card.Header>
-                <Card.Title>Installed Skills</Card.Title>
-                <Card.Description>Capabilities and tools available to the agent.</Card.Description>
+                <Card.Title>Recurring Tasks</Card.Title>
+                <Card.Description>Status of scheduled automation and background jobs.</Card.Description>
             </Card.Header>
             <Card.Content>
-                {#if data.skills && data.skills.length > 0}
+                {#if data.tasks && data.tasks.length > 0}
                     <div class="space-y-4">
-                        {#each data.skills as skill}
+                        {#each data.tasks as task}
                             <div class="p-4 border rounded-lg bg-card/50">
-                                <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center justify-between mb-3">
                                     <div class="flex items-center gap-2">
-                                        <h3 class="font-bold">{skill.name}</h3>
-                                        {#if skill.version}
-                                            <Badge variant="secondary" class="text-[10px] px-1.5 py-0">v{skill.version}</Badge>
-                                        {/if}
+                                        <h3 class="font-bold">{task.name}</h3>
+                                        <Badge variant={task.active ? 'default' : 'secondary'} class="text-[10px] px-1.5 py-0">
+                                            {task.active ? 'active' : 'inactive'}
+                                        </Badge>
                                     </div>
-                                    <div class="flex gap-1">
-                                        {#each (skill.tags || []) as tag}
-                                            <Badge variant="outline" class="text-[10px] px-1.5 py-0">{tag}</Badge>
-                                        {/each}
+                                    <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                        <Clock class="h-3 w-3" />
+                                        {task.cron_expression}
                                     </div>
                                 </div>
-                                <p class="text-sm text-muted-foreground">{skill.description || 'No description provided.'}</p>
+                                <div class="grid grid-cols-2 gap-4 text-xs">
+                                    <div class="bg-muted/50 p-2 rounded">
+                                        <span class="text-muted-foreground block mb-1 uppercase tracking-wider text-[9px] font-semibold">Last Run</span>
+                                        <span class="font-mono">{task.last_run || 'Never'}</span>
+                                    </div>
+                                    <div class="bg-muted/50 p-2 rounded">
+                                        <span class="text-muted-foreground block mb-1 uppercase tracking-wider text-[9px] font-semibold">Created</span>
+                                        <span class="font-mono text-[10px]">{task.created ? new Date(task.created).toLocaleDateString() : 'N/A'}</span>
+                                    </div>
+                                </div>
                             </div>
                         {/each}
                     </div>
                 {:else}
                     <div class="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">
-                        No skills installed.
+                        No scheduled tasks found.
                     </div>
                 {/if}
             </Card.Content>
@@ -370,27 +400,18 @@
                                 <p>This session has no recorded messages yet.</p>
                             </div>
                         {:else}
-                            <ScrollArea class="flex-1 p-4">
-                                <div class="space-y-6">
+                            <ScrollArea class="flex-1 p-6">
+                                <div class="space-y-6 max-w-3xl mx-auto">
                                     {#each sessionHistory as msg}
-                                        <div class="flex flex-col gap-2">
+                                        <div class="space-y-1">
                                             <div class="flex items-center gap-2">
-                                                <div class="h-6 w-6 rounded-full flex items-center justify-center shrink-0 
-                                                    {msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted border'}">
-                                                    {#if msg.role === 'user'}
-                                                        <User class="h-3 w-3" />
-                                                    {:else}
-                                                        <Bot class="h-3 w-3" />
-                                                    {/if}
-                                                </div>
-                                                <span class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                                <span class="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded
+                                                    {msg.role === 'user' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}">
                                                     {msg.role}
                                                 </span>
                                             </div>
-                                            <div class="pl-8">
-                                                <div class="rounded-lg px-4 py-3 text-sm border bg-card shadow-sm whitespace-pre-wrap">
-                                                    {msg.content}
-                                                </div>
+                                            <div class="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90 font-mono bg-muted/30 p-3 rounded-md border border-border/50">
+                                                {msg.content}
                                             </div>
                                         </div>
                                     {/each}

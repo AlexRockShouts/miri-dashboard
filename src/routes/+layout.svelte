@@ -1,9 +1,14 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { Button } from "$lib/components/ui/button";
-	import { MessageSquare, LayoutDashboard } from "lucide-svelte";
+	import { MessageSquare, LayoutDashboard, Cpu } from "lucide-svelte";
 	import { page } from "$app/state";
+
+	onMount(() => {
+		console.log('Layout mounted');
+	});
 
 	let { children } = $props();
 </script>
@@ -12,8 +17,9 @@
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-<div class="flex min-h-screen flex-col">
-	<nav class="border-b bg-background/95 backdrop-blur">
+{#if children}
+	<div class="flex min-h-screen flex-col">
+		<nav class="border-b bg-background/95 backdrop-blur">
 		<div class="container mx-auto flex h-14 items-center gap-4 px-4">
 			<a href="/" class="flex items-center gap-2 font-bold text-xl mr-4">
 				<span class="text-primary italic">Miri</span>
@@ -37,6 +43,15 @@
 					<LayoutDashboard class="h-4 w-4" />
 					Admin
 				</Button>
+				<Button
+					variant={page.url.pathname.startsWith('/skills') ? "default" : "ghost"}
+					size="sm"
+					class="gap-2"
+					href="/skills"
+				>
+					<Cpu class="h-4 w-4" />
+					Skills
+				</Button>
 			</div>
 		</div>
 	</nav>
@@ -45,3 +60,4 @@
 		{@render children()}
 	</main>
 </div>
+{/if}
