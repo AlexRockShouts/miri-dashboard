@@ -3,12 +3,16 @@
 	import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import * as Card from "$lib/components/ui/card";
-    import { Send, User, Bot, AlertCircle, Loader2 } from "lucide-svelte";
+    import { Send, User, Bot, AlertCircle, Loader2, History } from "lucide-svelte";
     import { Badge } from "$lib/components/ui/badge";
     import { chatState } from "$lib/state/chat.svelte";
     import Markdown from "$lib/components/chat/markdown.svelte";
+    import * as Popover from "$lib/components/ui/popover/index.js";
+    import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
+    import { buttonVariants } from "$lib/components/ui/button/index.js";
 
     let scrollAreaElement = $state<HTMLElement | null>(null);
+    let isHistoryOpen = $state(false);
 
     function scrollToBottom() {
         if (scrollAreaElement) {
@@ -120,13 +124,47 @@
                 onsubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
                 class="flex w-full items-center space-x-2"
             >
-                <Input 
-                    type="text" 
-                    placeholder={chatState.isConnected ? "Type your prompt here..." : chatState.useSSE ? "Type your prompt here (via SSE)..." : "Connecting..."}
-                    bind:value={chatState.inputMessage}
-                    disabled={chatState.isWaiting}
-                    autocomplete="off"
-                />
+                <div class="flex-1 flex gap-2">
+                    <Input 
+                        type="text" 
+                        placeholder={chatState.isConnected ? "Type your prompt here..." : chatState.useSSE ? "Type your prompt here (via SSE)..." : "Connecting..."}
+                        bind:value={chatState.inputMessage}
+                        disabled={chatState.isWaiting}
+                        autocomplete="off"
+                    />
+
+                    <Popover.Root bind:open={isHistoryOpen}>
+                        <Popover.Trigger
+                            class={buttonVariants({ variant: "outline", size: "icon" }) + " shrink-0"}
+                            title="Prompt History"
+                            disabled={chatState.promptHistory.length === 0}
+                        >
+                            <History class="h-4 w-4" />
+                        </Popover.Trigger>
+                        <Popover.Content class="w-80 p-0" align="end">
+                            <div class="p-3 border-b bg-muted/50">
+                                <h4 class="font-medium text-sm">Prompt History</h4>
+                                <p class="text-xs text-muted-foreground">Select a previous prompt</p>
+                            </div>
+                            <ScrollArea class="h-64">
+                                <div class="p-1">
+                                    {#each chatState.promptHistory as prompt}
+                                        <button 
+                                            class="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground rounded-sm transition-colors line-clamp-2"
+                                            onclick={() => {
+                                                chatState.inputMessage = prompt;
+                                                isHistoryOpen = false;
+                                            }}
+                                            title={prompt}
+                                        >
+                                            {prompt}
+                                        </button>
+                                    {/each}
+                                </div>
+                            </ScrollArea>
+                        </Popover.Content>
+                    </Popover.Root>
+                </div>
                 <Button type="submit" size="icon" disabled={chatState.isWaiting || !chatState.inputMessage.trim()}>
                     <Send class="h-4 w-4" />
                     <span class="sr-only">Send</span>
