@@ -1,9 +1,16 @@
 import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
-import type { MiriMessage, MiriSession } from '@miri/sdk';
+import type { Message as MiriMessage, Session as MiriSession, ApiAdminV1SessionsIdHistoryGet200Response } from '@miri/sdk';
 
 export interface Message {
     role: 'user' | 'assistant';
     content: string;
+}
+
+export interface TaskMessage {
+    id: string;
+    name: string;
+    message: string;
+    timestamp: Date;
 }
 
 class ChatState {
@@ -11,6 +18,7 @@ class ChatState {
     sessionId = $state("");
     inputMessage = $state("");
     messages = $state<Message[]>([]);
+    taskMessages = $state<TaskMessage[]>([]);
     isConnected = $state(false);
     isWaiting = $state(false);
     currentAssistantMessage = $state("");
@@ -19,27 +27,72 @@ class ChatState {
 
     constructor() {
         if (typeof window !== 'undefined') {
-            this.sessionId = localStorage.getItem('miri_session_id') || "";
-            try {
-                const saved = localStorage.getItem('miri_prompt_history');
-                if (saved) {
-                    this.promptHistory = JSON.parse(saved);
+            this.loadFromStorage();
+        }
+    }
+
+    loadFromStorage() {
+        if (typeof window === 'undefined') return;
+        
+        console.log('ChatState: Loading from storage');
+        this.sessionId = localStorage.getItem('miri_session_id') || "";
+        console.log('ChatState: Loaded sessionId:', this.sessionId);
+
+        try {
+            const savedMessages = localStorage.getItem('miri_chat_messages');
+            if (savedMessages) {
+                const parsed = JSON.parse(savedMessages);
+                if (Array.isArray(parsed)) {
+                    this.messages = parsed;
+                    console.log('ChatState: Loaded messages:', this.messages.length, 'items');
                 }
-            } catch (e) {
-                console.error('Failed to load prompt history:', e);
             }
+        } catch (e) {
+            console.error('ChatState: Failed to load chat messages:', e);
+        }
+
+        try {
+            const savedHistory = localStorage.getItem('miri_prompt_history');
+            if (savedHistory) {
+                const parsed = JSON.parse(savedHistory);
+                if (Array.isArray(parsed)) {
+                    this.promptHistory = parsed;
+                    console.log('ChatState: Loaded promptHistory:', this.promptHistory.length, 'items');
+                }
+            }
+        } catch (e) {
+            console.error('ChatState: Failed to load prompt history:', e);
+        }
+
+        try {
+            const savedTasks = localStorage.getItem('miri_task_messages');
+            if (savedTasks) {
+                const parsed = JSON.parse(savedTasks);
+                if (Array.isArray(parsed)) {
+                    this.taskMessages = parsed.map((t: any) => ({
+                        ...t,
+                        timestamp: new Date(t.timestamp)
+                    }));
+                    console.log('ChatState: Loaded taskMessages:', this.taskMessages.length, 'items');
+                }
+            }
+        } catch (e) {
+            console.error('ChatState: Failed to load task messages:', e);
         }
     }
 
     savePromptToHistory(prompt: string) {
-        if (!prompt.trim()) return;
+        if (!prompt || !prompt.trim()) return;
         
+        console.log('ChatState: Saving prompt to history:', prompt);
         // Remove duplicate if it exists (bring to top)
         const filtered = this.promptHistory.filter(p => p !== prompt);
-        this.promptHistory = [prompt, ...filtered].slice(0, 20);
+        const newHistory = [prompt, ...filtered].slice(0, 20);
+        this.promptHistory = newHistory;
         
         if (typeof window !== 'undefined') {
-            localStorage.setItem('miri_prompt_history', JSON.stringify(this.promptHistory));
+            localStorage.setItem('miri_prompt_history', JSON.stringify(newHistory));
+            console.log('ChatState: Saved promptHistory to localStorage. Size:', newHistory.length);
         }
     }
 
@@ -49,12 +102,44 @@ class ChatState {
         this.processMessage(data);
     }
 
+    saveMessagesToStorage() {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('miri_chat_messages', JSON.stringify(this.messages));
+        }
+    }
+
     processMessage(data: string) {
         if (!data) return;
         
         let content = "";
         try {
             const parsed = JSON.parse(data);
+            
+            // Persist session ID if provided by server
+            if (parsed.session_id && parsed.session_id !== this.sessionId) {
+                this.sessionId = parsed.session_id;
+                if (typeof window !== 'undefined') {
+                    localStorage.setItem('miri_session_id', this.sessionId);
+                }
+            }
+
+            // Check for task reports
+            if (parsed.source === "task") {
+                const newTask: TaskMessage = {
+                    id: parsed.task_id || Math.random().toString(36).substring(7),
+                    name: parsed.task_name || "Unknown Task",
+                    message: parsed.response || "",
+                    timestamp: new Date()
+                };
+                
+                // Add to list and keep only last 20
+                this.taskMessages = [...this.taskMessages, newTask].slice(-20);
+                
+                if (typeof window !== 'undefined') {
+                    localStorage.setItem('miri_task_messages', JSON.stringify(this.taskMessages));
+                }
+                return;
+            }
             
             if (parsed.content) {
                 content = parsed.content;
@@ -99,6 +184,7 @@ class ChatState {
             } else {
                 this.messages.push({ role: 'assistant', content: this.currentAssistantMessage });
             }
+            this.saveMessagesToStorage();
         }
     }
 
@@ -175,6 +261,7 @@ class ChatState {
 
         const userMsg = this.inputMessage;
         this.messages.push({ role: 'user', content: userMsg });
+        this.saveMessagesToStorage();
         
         this.currentAssistantMessage = "";
         this.isWaiting = true;

@@ -1,5 +1,5 @@
 import { DefaultApi, Configuration } from '@miri/sdk';
-import type { Config, HumanInfo, Session, Skill, Task } from '@miri/sdk';
+import type { Config, HumanInfo, Session, Skill, Task, ApiAdminV1SessionsIdHistoryGet200Response } from '@miri/sdk';
 import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
 import { MIRI_ADMIN_USER, MIRI_ADMIN_PASSWORD } from '$env/static/private';
 import type { PageServerLoad } from './$types';
@@ -82,25 +82,26 @@ export const actions = {
 
         try {
             const response = await defaultApi.apiAdminV1SessionsIdHistoryGet(sessionId);
-            const historyData = response.data as any;
+            const historyData = response.data as ApiAdminV1SessionsIdHistoryGet200Response;
 
             // Normalize messages to SDK shape: { role, content }
             let normalized: { role: string; content: string }[] = [];
             const msgs = Array.isArray(historyData?.messages) ? historyData.messages : [];
             for (const m of msgs) {
+                const message = m as any;
                 // If already in role/content form, keep as is
-                if (m && (typeof m.role === 'string' || typeof m.content === 'string')) {
-                    if (m.content && m.content.trim()) {
-                        normalized.push({ role: (m.role || 'assistant') as string, content: m.content as string });
+                if (message && (typeof message.role === 'string' || typeof message.content === 'string')) {
+                    if (message.content && message.content.trim()) {
+                        normalized.push({ role: (message.role || 'assistant') as string, content: message.content as string });
                     }
                     continue;
                 }
                 // Fallback: map { prompt, response } to two messages
-                if (m?.prompt && String(m.prompt).trim()) {
-                    normalized.push({ role: 'user', content: String(m.prompt) });
+                if (message?.prompt && String(message.prompt).trim()) {
+                    normalized.push({ role: 'user', content: String(message.prompt) });
                 }
-                if (m?.response && String(m.response).trim()) {
-                    normalized.push({ role: 'assistant', content: String(m.response) });
+                if (message?.response && String(message.response).trim()) {
+                    normalized.push({ role: 'assistant', content: String(message.response) });
                 }
             }
 

@@ -7,14 +7,18 @@
     import { applyAction, deserialize } from '$app/forms';
     import { ScrollArea } from "$lib/components/ui/scroll-area";
     import { invalidateAll } from '$app/navigation';
-    import type { Message } from "@miri/sdk";
     import type { PageData as AdminData } from "./$types";
     
+    interface DisplayMessage {
+        role: string;
+        content: string;
+    }
+
     let { data } = $props() as { data: AdminData };
 
     let isInspecting = $state(false);
     let selectedSession = $state("");
-    let sessionHistory = $state<Message[]>([]);
+    let sessionHistory = $state<DisplayMessage[]>([]);
     let isLoadingHistory = $state(false);
     let historyError = $state("");
 

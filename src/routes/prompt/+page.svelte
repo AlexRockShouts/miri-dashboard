@@ -3,7 +3,7 @@
 	import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import * as Card from "$lib/components/ui/card";
-    import { Send, User, Bot, AlertCircle, Loader2, History } from "lucide-svelte";
+    import { Send, User, Bot, AlertCircle, Loader2, History, ListTodo } from "lucide-svelte";
     import { Badge } from "$lib/components/ui/badge";
     import { chatState } from "$lib/state/chat.svelte";
     import Markdown from "$lib/components/chat/markdown.svelte";
@@ -13,6 +13,7 @@
 
     let scrollAreaElement = $state<HTMLElement | null>(null);
     let isHistoryOpen = $state(false);
+    let isTasksOpen = $state(false);
 
     function scrollToBottom() {
         if (scrollAreaElement) {
@@ -21,7 +22,8 @@
     }
 
     onMount(() => {
-        console.log('Prompt page mounted');
+        chatState.loadFromStorage();
+        console.log('Prompt page mounted. Prompt history size:', chatState.promptHistory.length);
         chatState.connect();
     });
 
@@ -49,6 +51,43 @@
             <p class="text-muted-foreground">Interactive session with Miri via WebSockets.</p>
         </div>
         <div class="flex items-center gap-2">
+            {#if chatState.taskMessages.length > 0}
+                <Popover.Root bind:open={isTasksOpen}>
+                    <Popover.Trigger
+                        class={buttonVariants({ variant: "outline", size: "sm" }) + " gap-2 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 transition-colors"}
+                        title="Async Tasks"
+                    >
+                        <ListTodo class="h-4 w-4" />
+                        <span class="font-medium">{chatState.taskMessages.length}</span>
+                        <span class="text-xs opacity-70">Tasks</span>
+                    </Popover.Trigger>
+                    <Popover.Content class="w-96 p-0" align="end">
+                        <div class="p-3 border-b bg-muted/50 flex items-center justify-between">
+                            <div>
+                                <h4 class="font-medium text-sm">Async Tasks</h4>
+                                <p class="text-xs text-muted-foreground">Received background task reports</p>
+                            </div>
+                            <Badge variant="secondary" class="bg-blue-100 text-blue-700">{chatState.taskMessages.length}</Badge>
+                        </div>
+                        <ScrollArea class="h-[400px]">
+                            <div class="p-2 space-y-2">
+                                {#each chatState.taskMessages.slice().reverse() as task}
+                                    <div class="p-3 rounded-lg border bg-card text-card-foreground shadow-sm space-y-1">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-[10px] font-bold uppercase tracking-wider text-primary">{task.name}</span>
+                                            <span class="text-[9px] text-muted-foreground">{task.timestamp.toLocaleTimeString()}</span>
+                                        </div>
+                                        <div class="text-xs leading-relaxed whitespace-pre-wrap">
+                                            {task.message}
+                                        </div>
+                                    </div>
+                                {/each}
+                            </div>
+                        </ScrollArea>
+                    </Popover.Content>
+                </Popover.Root>
+            {/if}
+
             {#if chatState.isConnected}
                 <Badge variant="outline" class="bg-green-50 text-green-700 border-green-200 gap-1.5 px-3 py-1">
                     <div class="h-2 w-2 rounded-full bg-green-500"></div>
