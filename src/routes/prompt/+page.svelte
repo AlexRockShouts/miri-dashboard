@@ -3,7 +3,7 @@
 	import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import * as Card from "$lib/components/ui/card";
-    import { Send, User, Bot, AlertCircle, Loader2, History, ListTodo } from "lucide-svelte";
+    import { Send, User, Bot, AlertCircle, Loader2, History, ListTodo, Paperclip, X } from "lucide-svelte";
     import { Badge } from "$lib/components/ui/badge";
     import { chatState } from "$lib/state/chat.svelte";
     import Markdown from "$lib/components/chat/markdown.svelte";
@@ -14,6 +14,7 @@
     let scrollAreaElement = $state<HTMLElement | null>(null);
     let isHistoryOpen = $state(false);
     let isTasksOpen = $state(false);
+    let fileInput = $state<HTMLInputElement | null>(null);
 
     function scrollToBottom() {
         if (scrollAreaElement) {
@@ -41,6 +42,15 @@
     async function handleSendMessage() {
         await chatState.sendMessage();
         setTimeout(scrollToBottom, 100);
+    }
+
+    function handleFileChange(e: Event) {
+        const target = e.target as HTMLInputElement;
+        const files = target.files;
+        if (files && files.length > 0) {
+            chatState.uploadFile(files[0]);
+            target.value = ""; // Clear for next selection
+        }
     }
 </script>
 
@@ -158,12 +168,50 @@
             </div>
         </div>
 
-        <Card.Footer class="p-4 bg-background border-t">
+        <Card.Footer class="p-4 bg-background border-t flex flex-col gap-3">
+            {#if chatState.pendingFiles.length > 0}
+                <div class="flex flex-wrap gap-2 w-full">
+                    {#each chatState.pendingFiles as filename, i}
+                        <Badge variant="secondary" class="gap-1 pl-2 pr-1 py-1">
+                            <span class="text-xs">{filename}</span>
+                            <button 
+                                class="hover:bg-muted rounded-full p-0.5"
+                                onclick={() => chatState.pendingFiles.splice(i, 1)}
+                            >
+                                <X class="h-3 w-3" />
+                            </button>
+                        </Badge>
+                    {/each}
+                </div>
+            {/if}
+
             <form 
                 onsubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
                 class="flex w-full items-center space-x-2"
             >
                 <div class="flex-1 flex gap-2">
+                    <input 
+                        type="file" 
+                        class="hidden" 
+                        bind:this={fileInput} 
+                        onchange={handleFileChange}
+                    />
+                    <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="icon" 
+                        class="shrink-0"
+                        title="Upload File"
+                        disabled={chatState.isUploading || chatState.isWaiting}
+                        onclick={() => fileInput?.click()}
+                    >
+                        {#if chatState.isUploading}
+                            <Loader2 class="h-4 w-4 animate-spin" />
+                        {:else}
+                            <Paperclip class="h-4 w-4" />
+                        {/if}
+                    </Button>
+
                     <Input 
                         type="text" 
                         placeholder={chatState.isConnected ? "Type your prompt here..." : chatState.useSSE ? "Type your prompt here (via SSE)..." : "Connecting..."}
@@ -204,7 +252,7 @@
                         </Popover.Content>
                     </Popover.Root>
                 </div>
-                <Button type="submit" size="icon" disabled={chatState.isWaiting || !chatState.inputMessage.trim()}>
+                <Button type="submit" size="icon" disabled={chatState.isWaiting || (!chatState.inputMessage.trim() && chatState.pendingFiles.length === 0)}>
                     <Send class="h-4 w-4" />
                     <span class="sr-only">Send</span>
                 </Button>

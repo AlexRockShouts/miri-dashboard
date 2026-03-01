@@ -324,20 +324,18 @@
                     <Table.Root>
                         <Table.Header>
                             <Table.Row>
-                                <Table.Head>ID</Table.Head>
-                                <Table.Head>Notes</Table.Head>
+                                <Table.Head>Profile Content</Table.Head>
                             </Table.Row>
                         </Table.Header>
-                        <Table.Body>
-                            {#each data.humans as human}
-                                <Table.Row>
-                                    <Table.Cell class="font-medium">{human.id}</Table.Cell>
-                                    <Table.Cell class="text-muted-foreground text-sm truncate max-w-[200px]">
-                                        {human.notes || 'No notes available'}
-                                    </Table.Cell>
-                                </Table.Row>
-                            {/each}
-                        </Table.Body>
+                                <Table.Body>
+                                    {#each data.humans as human}
+                                        <Table.Row>
+                                            <Table.Cell class="font-medium text-xs truncate max-w-[400px]">
+                                                {human.content || 'No information available'}
+                                            </Table.Cell>
+                                        </Table.Row>
+                                    {/each}
+                                </Table.Body>
                     </Table.Root>
                 {:else}
                     <div class="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">

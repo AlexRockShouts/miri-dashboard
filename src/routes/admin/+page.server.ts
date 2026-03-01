@@ -1,14 +1,22 @@
 import { DefaultApi, Configuration } from '@miri/sdk';
-import type { Config, HumanInfo, Session, Skill, Task, ApiAdminV1SessionsIdHistoryGet200Response } from '@miri/sdk';
+import type { 
+    Config, 
+    Human, 
+    Session, 
+    Skill, 
+    Task, 
+    ApiAdminV1SessionsIdHistoryGet200Response,
+    ApiAdminV1HealthGet200Response
+} from '@miri/sdk';
 import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
 import { MIRI_ADMIN_USER, MIRI_ADMIN_PASSWORD } from '$env/static/private';
 import type { PageServerLoad } from './$types';
 
 export interface AdminData {
-    health: { status?: string; message?: string } | null;
+    health: ApiAdminV1HealthGet200Response | null;
     config: Config | null;
     sessions: string[];
-    humans: HumanInfo[];
+    humans: Human[];
     tasks: Task[];
     skills: Skill[];
     error?: string;
@@ -27,7 +35,7 @@ export const load: PageServerLoad = async (): Promise<AdminData> => {
     const defaultApi = new DefaultApi(config);
 
     try {
-        const [health, configRes, sessions, humans, tasks, skills] = await Promise.all([
+        const [healthRes, configRes, sessionsRes, humansRes, tasksRes, skillsRes] = await Promise.all([
             defaultApi.apiAdminV1HealthGet(),
             defaultApi.apiAdminV1ConfigGet(),
             defaultApi.apiAdminV1SessionsGet(),
@@ -37,12 +45,12 @@ export const load: PageServerLoad = async (): Promise<AdminData> => {
         ]);
 
         return {
-            health: health.data,
+            health: healthRes.data,
             config: configRes.data,
-            sessions: sessions.data,
-            humans: humans.data,
-            tasks: tasks.data,
-            skills: skills.data
+            sessions: sessionsRes.data,
+            humans: Array.isArray(humansRes.data) ? humansRes.data : [humansRes.data],
+            tasks: tasksRes.data,
+            skills: skillsRes.data
         };
     } catch (e: any) {
         console.error('Failed to fetch Miri data:', e.message);

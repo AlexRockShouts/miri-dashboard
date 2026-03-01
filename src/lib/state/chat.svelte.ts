@@ -24,6 +24,8 @@ class ChatState {
     currentAssistantMessage = $state("");
     useSSE = $state(false);
     promptHistory = $state<string[]>([]);
+    pendingFiles = $state<string[]>([]);
+    isUploading = $state(false);
 
     constructor() {
         if (typeof window !== 'undefined') {
@@ -256,10 +258,56 @@ class ChatState {
         };
     }
 
-    async sendMessage() {
-        if (!this.inputMessage.trim()) return;
+    async uploadFile(file: File) {
+        if (!file) return;
+        
+        this.isUploading = true;
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            let serverUrl = PUBLIC_MIRI_SERVER_URL;
+            if (serverUrl.endsWith('/')) {
+                serverUrl = serverUrl.slice(0, -1);
+            }
+            
+            const res = await fetch(`${serverUrl}/api/v1/files/upload`, {
+                method: 'POST',
+                headers: {
+                    'X-Server-Key': PUBLIC_MIRI_SERVER_KEY
+                },
+                body: formData
+            });
+            
+            if (!res.ok) {
+                throw new Error(`Upload failed: ${res.status} ${res.statusText}`);
+            }
+            
+            const data = await res.json();
+            if (data.path) {
+                this.pendingFiles.push(data.filename);
+                console.log('File uploaded and added to pending list:', data.filename, 'as path:', data.path);
+            }
+        } catch (e) {
+            console.error('File upload failed:', e);
+            alert('File upload failed. Check the console for details.');
+        } finally {
+            this.isUploading = false;
+        }
+    }
 
-        const userMsg = this.inputMessage;
+    async sendMessage() {
+        if (!this.inputMessage.trim() && this.pendingFiles.length === 0) return;
+
+        let userMsg = this.inputMessage;
+        
+        // Append pending files to the message if any
+        if (this.pendingFiles.length > 0) {
+            const filesList = this.pendingFiles.join(', ');
+            userMsg = `${userMsg}\n\nAttached files: ${filesList}`.trim();
+            this.pendingFiles = []; // Clear pending files after sending
+        }
+
         this.messages.push({ role: 'user', content: userMsg });
         this.saveMessagesToStorage();
         
