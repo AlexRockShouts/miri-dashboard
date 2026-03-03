@@ -46,7 +46,7 @@ export const load: PageServerLoad = async ({ url }): Promise<BrainData> => {
             summaries: Array.isArray(summariesRes.data.data) ? summariesRes.data.data : [],
             totalFacts: factsRes.data.total || 0,
             totalSummaries: summariesRes.data.total || 0,
-            topology: topologyRes.data as TopologyData,
+            topology: topologyRes?.data as TopologyData || { nodes: [], edges: [] },
             page,
             pageSize
         };
@@ -105,6 +105,7 @@ export const load: PageServerLoad = async ({ url }): Promise<BrainData> => {
             summaries: [],
             totalFacts: 0,
             totalSummaries: 0,
+            topology: { nodes: [], edges: [] },
             page,
             pageSize
         };

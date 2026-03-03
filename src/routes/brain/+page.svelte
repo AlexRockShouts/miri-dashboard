@@ -1,4 +1,5 @@
 <script lang="ts">
+    import JSONTree from '$lib/components/json-tree/json-tree.svelte';
     import { onMount } from 'svelte';
     import * as Card from "$lib/components/ui/card";
     import { Badge } from "$lib/components/ui/badge";
@@ -127,7 +128,7 @@
         }
     });
 
-    let allCategories = $derived(() => {
+    let allCategories = $derived.by(() => {
         const categories = new Set<string>();
         data.facts.forEach(f => {
             if (f.metadata?.category) categories.add(f.metadata.category);
@@ -169,9 +170,65 @@
 
     let totalPages = $derived(
         activeTab === 'facts' 
-            ? Math.ceil(data.totalFacts / pageSize) 
-            : Math.ceil(data.totalSummaries / pageSize)
+            ? Math.ceil(filteredFacts.length / pageSize) 
+            : Math.ceil(filteredSummaries.length / pageSize)
     );
+
+    function tryParseJson(str: string | undefined) {
+        if (!str) return null;
+        
+        let target = str.trim();
+        
+        // Handle Markdown-wrapped JSON (e.g., ```json ... ```)
+        if (target.startsWith('```')) {
+            const lines = target.split('\n');
+            const firstLine = lines[0].toLowerCase();
+            
+            // If it starts with ```json or just ```
+            if (firstLine.startsWith('```json') || firstLine === '```') {
+                // Find the index of the last line starting with ```
+                const lastLineIndex = lines.findLastIndex(line => line.trim() === '```');
+                if (lastLineIndex > 0) {
+                    target = lines.slice(1, lastLineIndex).join('\n').trim();
+                }
+            }
+        }
+        
+        try {
+            const parsed = JSON.parse(target);
+            if (typeof parsed === 'object' && parsed !== null) return parsed;
+        } catch (e) {
+            // If failed, try to find the first '{' and last '}'
+            const start = target.indexOf('{');
+            const end = target.lastIndexOf('}');
+            
+            if (start !== -1 && end !== -1 && end > start) {
+                try {
+                    const parsed = JSON.parse(target.substring(start, end + 1));
+                    if (typeof parsed === 'object' && parsed !== null) return parsed;
+                } catch (innerE) {}
+            }
+
+            // Same for arrays
+            const arrStart = target.indexOf('[');
+            const arrEnd = target.lastIndexOf(']');
+            if (arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart) {
+                try {
+                    const parsed = JSON.parse(target.substring(arrStart, arrEnd + 1));
+                    if (typeof parsed === 'object' && parsed !== null) return parsed;
+                } catch (innerE) {}
+            }
+        }
+        return null;
+    }
+
+    function handleRefresh() {
+        // Clear session ID and page from URL to get a clean refresh of everything
+        const url = new URL(window.location.href);
+        url.searchParams.delete('page');
+        url.searchParams.delete('session_id');
+        window.location.href = url.pathname;
+    }
 </script>
 
 <div class="container mx-auto py-8 px-4">
@@ -185,7 +242,7 @@
         </div>
         
         <div class="flex items-center gap-2">
-            <Button variant="outline" size="sm" onclick={() => window.location.reload()}>Refresh</Button>
+            <Button variant="outline" size="sm" onclick={handleRefresh}>Refresh</Button>
         </div>
     </header>
 
@@ -251,7 +308,7 @@
                         bind:value={selectedCategory} 
                         class="bg-transparent border-none text-xs focus:ring-0 cursor-pointer outline-none py-1 min-w-[80px]"
                     >
-                        {#each allCategories() as category}
+                        {#each allCategories as category}
                             <option value={category}>
                                 {category === 'all' ? 'All Categories' : category.charAt(0).toUpperCase() + category.slice(1)}
                             </option>
@@ -336,7 +393,14 @@
                 {#each paginatedSummaries as summary}
                     <Card.Root class="flex flex-col h-full hover:shadow-md transition-shadow">
                         <Card.Content class="p-4 flex-1">
-                            <p class="text-sm leading-relaxed mb-4 italic text-muted-foreground">"{summary.content}"</p>
+                            {@const jsonContent = tryParseJson(summary.content)}
+                            {#if jsonContent}
+                                <div class="bg-muted/30 p-2 rounded-md border text-xs overflow-auto max-h-[300px] mb-4">
+                                    <JSONTree value={jsonContent} defaultExpandedLevel={2} />
+                                </div>
+                            {:else}
+                                <p class="text-sm leading-relaxed mb-4 italic text-muted-foreground">"{summary.content}"</p>
+                            {/if}
                             
                             {#if summary.metadata && Object.keys(summary.metadata).length > 0}
                                 <div class="flex flex-wrap gap-1.5 pt-3 border-t">

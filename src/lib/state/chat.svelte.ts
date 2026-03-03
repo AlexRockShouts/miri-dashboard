@@ -171,7 +171,9 @@ class ChatState {
             // Check if this is a meta-tag/thought that should be hidden from the UI
             const isMeta = content.startsWith('[Thought:') || 
                           content.startsWith('[Tool:') || 
-                          content.startsWith('[ToolResult:');
+                          content.startsWith('[ToolResult:') ||
+                          content.startsWith('[Skill:') ||
+                          content.startsWith('[Action:');
             
             if (isMeta) {
                 // Parse the meta type and content
@@ -187,6 +189,12 @@ class ChatState {
                 } else if (content.startsWith('[Tool:')) {
                     type = "tool";
                     cleanContent = content.replace('[Tool:', '').replace(/\]$/, '').trim();
+                } else if (content.startsWith('[Skill:')) {
+                    type = "skill";
+                    cleanContent = content.replace('[Skill:', '').replace(/\]$/, '').trim();
+                } else if (content.startsWith('[Action:')) {
+                    type = "action";
+                    cleanContent = content.replace('[Action:', '').replace(/\]$/, '').trim();
                 }
 
                 this.statusMessages.push({
@@ -211,7 +219,34 @@ class ChatState {
                           content.startsWith('[Stream Error:');
             
             if (isOtherMeta) {
-                // Do not add to statusMessages as per "show only [Thought:, [Tool:, [ToolResult:"
+                // Parse the meta type and content
+                let type = "info";
+                let cleanContent = content;
+
+                if (content.startsWith('[Usage:')) {
+                    type = "usage";
+                    cleanContent = content.replace('[Usage:', '').replace(/\]$/, '').trim();
+                } else if (content.startsWith('[Error:')) {
+                    type = "error";
+                    cleanContent = content.replace('[Error:', '').replace(/\]$/, '').trim();
+                } else if (content.startsWith('[Panic:')) {
+                    type = "error";
+                    cleanContent = content.replace('[Panic:', '').replace(/\]$/, '').trim();
+                } else if (content.startsWith('[Stream Error:')) {
+                    type = "error";
+                    cleanContent = content.replace('[Stream Error:', '').replace(/\]$/, '').trim();
+                }
+
+                this.statusMessages.push({
+                    type,
+                    content: cleanContent,
+                    timestamp: new Date()
+                });
+                
+                // Keep only last 50 status messages
+                if (this.statusMessages.length > 50) {
+                    this.statusMessages = this.statusMessages.slice(-50);
+                }
                 return;
             }
 

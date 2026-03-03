@@ -3,7 +3,7 @@
 	import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import * as Card from "$lib/components/ui/card";
-    import { Send, User, Bot, AlertCircle, Loader2, History, ListTodo, Paperclip, X, Activity, Cpu, Lightbulb, Terminal, Brain } from "lucide-svelte";
+    import { Send, User, Bot, AlertCircle, Loader2, History, ListTodo, Paperclip, X, Activity, Cpu, Lightbulb, Terminal, Brain, Zap } from "lucide-svelte";
     import { Badge } from "$lib/components/ui/badge";
     import { chatState } from "$lib/state/chat.svelte";
     import Markdown from "$lib/components/chat/markdown.svelte";
@@ -288,6 +288,8 @@
                                     {status.type === 'thought' ? 'border-amber-400' : 
                                      status.type === 'tool' ? 'border-blue-400' : 
                                      status.type === 'tool_result' ? 'border-green-400' : 
+                                     status.type === 'skill' ? 'border-purple-400' : 
+                                     status.type === 'action' ? 'border-indigo-400' : 
                                      status.type === 'error' ? 'border-red-500' : 
                                      'border-slate-300'}">
                                     <div class="flex items-center justify-between gap-2">
@@ -301,6 +303,12 @@
                                             {:else if status.type === 'tool_result'}
                                                 <Activity class="h-3 w-3 text-green-500" />
                                                 <span class="text-[10px] font-bold uppercase tracking-tight text-green-600">Tool Result</span>
+                                            {:else if status.type === 'skill'}
+                                                <Cpu class="h-3 w-3 text-purple-500" />
+                                                <span class="text-[10px] font-bold uppercase tracking-tight text-purple-600">Skill</span>
+                                            {:else if status.type === 'action'}
+                                                <Zap class="h-3 w-3 text-indigo-500" />
+                                                <span class="text-[10px] font-bold uppercase tracking-tight text-indigo-600">Action</span>
                                             {:else if status.type === 'usage'}
                                                 <Activity class="h-3 w-3 text-slate-500" />
                                                 <span class="text-[10px] font-bold uppercase tracking-tight text-slate-600">Usage</span>
