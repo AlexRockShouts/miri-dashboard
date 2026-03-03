@@ -5,7 +5,7 @@ import type {
     Session, 
     Skill, 
     Task, 
-    ApiAdminV1SessionsIdHistoryGet200Response,
+    PaginatedHistory,
     ApiAdminV1HealthGet200Response
 } from '@miri/sdk';
 import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
@@ -38,19 +38,19 @@ export const load: PageServerLoad = async (): Promise<AdminData> => {
         const [healthRes, configRes, sessionsRes, humansRes, tasksRes, skillsRes] = await Promise.all([
             defaultApi.apiAdminV1HealthGet(),
             defaultApi.apiAdminV1ConfigGet(),
-            defaultApi.apiAdminV1SessionsGet(),
+            defaultApi.apiAdminV1SessionsGet(100, 0),
             defaultApi.apiAdminV1HumanGet(),
-            defaultApi.apiAdminV1TasksGet(),
-            defaultApi.apiAdminV1SkillsGet()
+            defaultApi.apiAdminV1TasksGet(100, 0),
+            defaultApi.apiAdminV1SkillsGet(100, 0)
         ]);
 
         return {
             health: healthRes.data,
             config: configRes.data,
-            sessions: sessionsRes.data,
-            humans: Array.isArray(humansRes.data) ? humansRes.data : [humansRes.data],
-            tasks: tasksRes.data,
-            skills: skillsRes.data
+            sessions: sessionsRes.data.data as string[],
+            humans: [humansRes.data],
+            tasks: tasksRes.data.data as Task[],
+            skills: skillsRes.data.data as Skill[]
         };
     } catch (e: any) {
         console.error('Failed to fetch Miri data:', e.message);
@@ -89,8 +89,8 @@ export const actions = {
         const defaultApi = new DefaultApi(config);
 
         try {
-            const response = await defaultApi.apiAdminV1SessionsIdHistoryGet(sessionId);
-            const historyData = response.data as ApiAdminV1SessionsIdHistoryGet200Response;
+            const response = await defaultApi.apiAdminV1SessionsIdHistoryGet(sessionId, 100, 0);
+            const historyData = response.data as PaginatedHistory;
 
             // Normalize messages to SDK shape: { role, content }
             let normalized: { role: string; content: string }[] = [];

@@ -1,5 +1,5 @@
 import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
-import type { Message as MiriMessage, Session as MiriSession, ApiAdminV1SessionsIdHistoryGet200Response } from '@miri/sdk';
+import type { Message as MiriMessage, Session as MiriSession, PaginatedHistory } from '@miri/sdk';
 
 export interface Message {
     role: 'user' | 'assistant';
@@ -21,11 +21,14 @@ class ChatState {
     taskMessages = $state<TaskMessage[]>([]);
     isConnected = $state(false);
     isWaiting = $state(false);
+    isStreaming = $state(false);
+    isNewCommandPending = $state(false);
     currentAssistantMessage = $state("");
     useSSE = $state(false);
     promptHistory = $state<string[]>([]);
     pendingFiles = $state<string[]>([]);
     isUploading = $state(false);
+    statusMessages = $state<{type: string, content: string, timestamp: Date}[]>([]);
 
     constructor() {
         if (typeof window !== 'undefined') {
@@ -147,6 +150,12 @@ class ChatState {
                 content = parsed.content;
             } else if (parsed.response) {
                 content = parsed.response;
+            } else if (parsed.done || parsed.status === "done") {
+                this.isStreaming = false;
+                if (this.isNewCommandPending) {
+                    this.resetState();
+                }
+                return;
             } else if (typeof parsed === 'string') {
                 content = parsed;
             } else if (parsed.error) {
@@ -161,19 +170,54 @@ class ChatState {
         if (content) {
             // Check if this is a meta-tag/thought that should be hidden from the UI
             const isMeta = content.startsWith('[Thought:') || 
-                          content.startsWith('[Tools:') || 
-                          content.startsWith('[Usage:') || 
+                          content.startsWith('[Tool:') || 
+                          content.startsWith('[ToolResult:');
+            
+            if (isMeta) {
+                // Parse the meta type and content
+                let type = "info";
+                let cleanContent = content;
+                
+                if (content.startsWith('[Thought:')) {
+                    type = "thought";
+                    cleanContent = content.replace('[Thought:', '').replace(/\]$/, '').trim();
+                } else if (content.startsWith('[ToolResult:')) {
+                    type = "tool_result";
+                    cleanContent = content.replace('[ToolResult:', '').replace(/\]$/, '').trim();
+                } else if (content.startsWith('[Tool:')) {
+                    type = "tool";
+                    cleanContent = content.replace('[Tool:', '').replace(/\]$/, '').trim();
+                }
+
+                this.statusMessages.push({
+                    type,
+                    content: cleanContent,
+                    timestamp: new Date()
+                });
+                
+                // Keep only last 50 status messages
+                if (this.statusMessages.length > 50) {
+                    this.statusMessages = this.statusMessages.slice(-50);
+                }
+
+                // Keep thinking animation on meta; do not append to UI
+                return;
+            }
+
+            // Also check for other technical tags that should be hidden from the UI
+            const isOtherMeta = content.startsWith('[Usage:') || 
                           content.startsWith('[Error:') || 
                           content.startsWith('[Panic:') ||
                           content.startsWith('[Stream Error:');
             
-            if (isMeta) {
-                // Keep thinking animation on meta; do not append to UI
+            if (isOtherMeta) {
+                // Do not add to statusMessages as per "show only [Thought:, [Tool:, [ToolResult:"
                 return;
             }
 
             // We received real content; stop showing the thinking indicator
             this.isWaiting = false;
+            this.isStreaming = true;
 
             this.currentAssistantMessage += content;
             
@@ -226,6 +270,15 @@ class ChatState {
         this.socket.onmessage = (event) => {
             let data = event.data;
             console.log('WS message received:', data);
+
+            // Handle end-of-stream signal if provided as a raw string or JSON property
+            if (data === "[DONE]") {
+                this.isStreaming = false;
+                if (this.isNewCommandPending) {
+                    this.resetState();
+                }
+                return;
+            }
             
             if (data instanceof Blob) {
                 const reader = new FileReader();
@@ -241,6 +294,13 @@ class ChatState {
         this.socket.onclose = (ev) => {
             console.log('WebSocket disconnected', { code: ev?.code, reason: ev?.reason, wasClean: ev?.wasClean });
             this.isConnected = false;
+            
+            // Do not auto-reconnect if it was a clean close (like when we reset for /new)
+            // or if we're explicitly switching to SSE.
+            if (ev?.code === 1000 || ev?.code === 1001) {
+                return;
+            }
+
             if (!this.useSSE && (!ev || ev.code >= 400 || ev.code === 1006)) {
                 console.warn('Enabling SSE fallback for prompt streaming');
                 this.useSSE = true;
@@ -299,6 +359,11 @@ class ChatState {
     async sendMessage() {
         if (!this.inputMessage.trim() && this.pendingFiles.length === 0) return;
 
+        // Clear status messages for new request
+        this.statusMessages = [];
+
+        const originalInput = this.inputMessage.trim();
+        const isNewCommand = originalInput === "/new";
         let userMsg = this.inputMessage;
         
         // Append pending files to the message if any
@@ -313,6 +378,8 @@ class ChatState {
         
         this.currentAssistantMessage = "";
         this.isWaiting = true;
+        this.isStreaming = false;
+        this.isNewCommandPending = isNewCommand;
 
         if (!this.useSSE && this.socket && this.socket.readyState === WebSocket.OPEN) {
             const message = JSON.stringify({ prompt: userMsg });
@@ -321,10 +388,37 @@ class ChatState {
         } else {
             console.log('Sending via SSE fallback');
             await this.streamViaSSE(userMsg);
+            
+            // For SSE, we know when it's done because the function returns
+            this.isStreaming = false;
+            if (this.isNewCommandPending) {
+                this.resetState();
+            }
         }
         
         this.savePromptToHistory(userMsg);
         this.inputMessage = "";
+    }
+
+    resetState() {
+        console.log('ChatState: Resetting chat state.');
+        this.isNewCommandPending = false;
+        this.messages = [];
+        this.currentAssistantMessage = "";
+        this.sessionId = ""; // Clear session ID to start truly fresh
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('miri_chat_messages');
+            localStorage.removeItem('miri_session_id');
+        }
+        
+        // Reconnect to get a new session
+        if (!this.useSSE) {
+            if (this.socket) {
+                this.socket.close(1000, "Reset session");
+            }
+            // Wait a bit for the socket to close and then reconnect
+            setTimeout(() => this.connect(), 500);
+        }
     }
 
     async streamViaSSE(prompt: string) {
@@ -373,7 +467,12 @@ class ChatState {
                         }
                     }
                     
-                    if (eventData) {
+                    if (eventData === "[DONE]") {
+                        this.isStreaming = false;
+                        if (this.isNewCommandPending) {
+                            this.resetState();
+                        }
+                    } else if (eventData) {
                         this.handleIncomingChunk(eventData);
                     }
                 }

@@ -3,7 +3,7 @@
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { Button } from "$lib/components/ui/button";
-	import { MessageSquare, LayoutDashboard, Cpu } from "lucide-svelte";
+	import { MessageSquare, LayoutDashboard, Cpu, Brain as BrainIcon } from "lucide-svelte";
 	import { page } from "$app/state";
 
 	onMount(() => {
@@ -51,6 +51,15 @@
 				>
 					<Cpu class="h-4 w-4" />
 					Skills
+				</Button>
+				<Button
+					variant={page.url.pathname.startsWith('/brain') ? "default" : "ghost"}
+					size="sm"
+					class="gap-2"
+					href="/brain"
+				>
+					<BrainIcon class="h-4 w-4" />
+					Brain
 				</Button>
 			</div>
 		</div>

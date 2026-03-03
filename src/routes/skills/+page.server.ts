@@ -22,8 +22,8 @@ export const load: PageServerLoad = async (): Promise<SkillsData> => {
     const defaultApi = new DefaultApi(config);
 
     try {
-        const skillsRes = await defaultApi.apiAdminV1SkillsGet();
-        const skills: Skill[] = (skillsRes.data as any) || [];
+        const skillsRes = await defaultApi.apiAdminV1SkillsGet(100, 0);
+        const skills: Skill[] = (skillsRes.data.data as any) || [];
 
         return {
             skills

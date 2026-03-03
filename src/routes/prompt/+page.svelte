@@ -3,7 +3,7 @@
 	import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import * as Card from "$lib/components/ui/card";
-    import { Send, User, Bot, AlertCircle, Loader2, History, ListTodo, Paperclip, X } from "lucide-svelte";
+    import { Send, User, Bot, AlertCircle, Loader2, History, ListTodo, Paperclip, X, Activity, Cpu, Lightbulb, Terminal, Brain } from "lucide-svelte";
     import { Badge } from "$lib/components/ui/badge";
     import { chatState } from "$lib/state/chat.svelte";
     import Markdown from "$lib/components/chat/markdown.svelte";
@@ -54,7 +54,7 @@
     }
 </script>
 
-<div class="container mx-auto py-6 px-4 w-[70vw] max-w-full h-[calc(100vh-3.5rem)] flex flex-col">
+<div class="container mx-auto py-6 px-4 max-w-7xl h-[calc(100vh-3.5rem)] flex flex-col">
     <header class="mb-6 flex items-center justify-between">
         <div>
             <h1 class="text-3xl font-bold tracking-tight text-foreground">Prompt</h1>
@@ -109,10 +109,25 @@
                     Disconnected
                 </Badge>
             {/if}
+
+            {#if chatState.sessionId}
+                <Button 
+                    variant="outline" 
+                    size="sm" 
+                    class="gap-2" 
+                    href="/brain?session_id={chatState.sessionId}"
+                    title="View reasoning topology for this session"
+                >
+                    <Brain class="h-4 w-4" />
+                    <span class="hidden sm:inline">Brain</span>
+                </Button>
+            {/if}
         </div>
     </header>
 
-    <Card.Root class="flex-1 overflow-hidden flex flex-col bg-muted/30">
+    <div class="flex-1 flex gap-6 overflow-hidden">
+        <!-- Main Chat Card (Left now) -->
+        <Card.Root class="flex-1 overflow-hidden flex flex-col bg-muted/30">
         <div class="flex-1 overflow-y-auto p-4" bind:this={scrollAreaElement}>
             <div class="space-y-4">
                 {#if chatState.messages.length === 0}
@@ -125,7 +140,7 @@
 
                 {#each chatState.messages as message}
                     <div class="flex {message.role === 'user' ? 'justify-end' : 'justify-start'}">
-                        <div class="flex gap-3 max-w-[80%] {message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}">
+                        <div class="flex gap-3 w-full {message.role === 'user' ? 'flex-row-reverse max-w-[80%] ml-auto' : 'flex-row'}">
                             <div class="h-8 w-8 rounded-full flex items-center justify-center shrink-0 
                                 {message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted border'}">
                                 {#if message.role === 'user'}
@@ -134,7 +149,7 @@
                                     <Bot class="h-4 w-4" />
                                 {/if}
                             </div>
-                            <div class="rounded-2xl px-4 py-2 text-sm shadow-sm
+                            <div class="rounded-2xl px-4 py-2 text-sm shadow-sm flex-1
                                 {message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-card border'}">
                                 {#if message.role === 'user'}
                                     <p class="whitespace-pre-wrap">{message.content}</p>
@@ -148,18 +163,15 @@
 
                 {#if chatState.isWaiting}
                     <div class="flex justify-start">
-                        <div class="flex gap-3 max-w-[80%]">
+                        <div class="flex gap-3 w-full flex-row">
                             <div class="h-8 w-8 rounded-full flex items-center justify-center shrink-0 bg-muted border">
                                 <Bot class="h-4 w-4" />
                             </div>
-                            <div class="rounded-2xl px-4 py-2 text-sm shadow-sm bg-card border flex flex-col gap-1.5">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs font-medium text-muted-foreground animate-pulse">Miri is thinking</span>
-                                    <div class="flex gap-1">
-                                        <div class="h-1 w-1 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]"></div>
-                                        <div class="h-1 w-1 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]"></div>
-                                        <div class="h-1 w-1 rounded-full bg-primary animate-bounce"></div>
-                                    </div>
+                            <div class="rounded-2xl px-4 py-3 bg-card border shadow-sm">
+                                <div class="flex gap-1">
+                                    <div class="w-1.5 h-1.5 bg-foreground/50 rounded-full animate-bounce"></div>
+                                    <div class="w-1.5 h-1.5 bg-foreground/50 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                                    <div class="w-1.5 h-1.5 bg-foreground/50 rounded-full animate-bounce [animation-delay:0.4s]"></div>
                                 </div>
                             </div>
                         </div>
@@ -259,4 +271,64 @@
             </form>
         </Card.Footer>
     </Card.Root>
+
+        <!-- Status Card (Right now) -->
+        <Card.Root class="w-80 flex flex-col bg-muted/20 overflow-hidden border-dashed">
+            <Card.Content class="flex-1 overflow-hidden p-0">
+                <ScrollArea class="h-full">
+                    <div class="p-4 space-y-4">
+                        {#if chatState.statusMessages.length === 0}
+                            <div class="flex flex-col items-center justify-center py-10 text-center opacity-40">
+                                <Cpu class="h-8 w-8 mb-2" />
+                                <p class="text-xs">No activity yet</p>
+                            </div>
+                        {:else}
+                            {#each chatState.statusMessages.slice().reverse() as status}
+                                <div class="space-y-1.5 border-l-2 pl-3 py-0.5 
+                                    {status.type === 'thought' ? 'border-amber-400' : 
+                                     status.type === 'tool' ? 'border-blue-400' : 
+                                     status.type === 'tool_result' ? 'border-green-400' : 
+                                     status.type === 'error' ? 'border-red-500' : 
+                                     'border-slate-300'}">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="flex items-center gap-1.5">
+                                            {#if status.type === 'thought'}
+                                                <Lightbulb class="h-3 w-3 text-amber-500" />
+                                                <span class="text-[10px] font-bold uppercase tracking-tight text-amber-600">Thinking</span>
+                                            {:else if status.type === 'tool'}
+                                                <Terminal class="h-3 w-3 text-blue-500" />
+                                                <span class="text-[10px] font-bold uppercase tracking-tight text-blue-600">Using Tool</span>
+                                            {:else if status.type === 'tool_result'}
+                                                <Activity class="h-3 w-3 text-green-500" />
+                                                <span class="text-[10px] font-bold uppercase tracking-tight text-green-600">Tool Result</span>
+                                            {:else if status.type === 'usage'}
+                                                <Activity class="h-3 w-3 text-slate-500" />
+                                                <span class="text-[10px] font-bold uppercase tracking-tight text-slate-600">Usage</span>
+                                            {:else if status.type === 'error'}
+                                                <AlertCircle class="h-3 w-3 text-red-500" />
+                                                <span class="text-[10px] font-bold uppercase tracking-tight text-red-600">Error</span>
+                                            {:else}
+                                                <Activity class="h-3 w-3 text-slate-500" />
+                                                <span class="text-[10px] font-bold uppercase tracking-tight text-slate-600">Info</span>
+                                            {/if}
+                                        </div>
+                                        <span class="text-[9px] text-muted-foreground whitespace-nowrap">{status.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</span>
+                                    </div>
+                                    <div class="text-xs leading-relaxed text-foreground/80 break-words status-markdown">
+                                        <Markdown content={status.content} />
+                                    </div>
+                                </div>
+                            {/each}
+                        {/if}
+                    </div>
+                </ScrollArea>
+            </Card.Content>
+            {#if chatState.isWaiting}
+                <div class="p-3 bg-primary/5 border-t flex items-center gap-2">
+                    <Loader2 class="h-3 w-3 animate-spin text-primary" />
+                    <span class="text-[10px] font-medium animate-pulse">Processing...</span>
+                </div>
+            {/if}
+        </Card.Root>
+    </div>
 </div>
