@@ -9,13 +9,13 @@
     
     let { data } = $props() as { data: BrainData };
     
-    let activeTab = $state<'facts' | 'summaries' | 'topology' | 'map'>('facts');
+    let activeTab = $state<'facts' | 'summaries' | 'topology' | 'map' | 'about'>('facts');
     
     // Pagination state (synced with URL)
     let currentPage = $state(data.page || 1);
     const pageSize = data.pageSize || 50;
 
-    function goToTab(tab: 'facts' | 'summaries' | 'topology' | 'map') {
+    function goToTab(tab: 'facts' | 'summaries' | 'topology' | 'map' | 'about') {
         activeTab = tab;
         const url = new URL(window.location.href);
         url.searchParams.set('tab', tab);
@@ -130,8 +130,8 @@
     onMount(() => {
         // Check if we should switch to a specific tab from the URL
         const urlParams = new URLSearchParams(window.location.search);
-        const tab = urlParams.get('tab') as 'facts' | 'summaries' | 'topology' | 'map' | null;
-        if (tab && ['facts', 'summaries', 'topology', 'map'].includes(tab)) {
+        const tab = urlParams.get('tab') as 'facts' | 'summaries' | 'topology' | 'map' | 'about' | null;
+        if (tab && ['facts', 'summaries', 'topology', 'map', 'about'].includes(tab)) {
             activeTab = tab;
         }
 
@@ -356,6 +356,14 @@
                     >
                         <Brain class="h-4 w-4" />
                         Brain Map
+                    </button>
+                    <button 
+                        class="px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-2
+                        {activeTab === 'about' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'}"
+                        onclick={() => goToTab('about')}
+                    >
+                        <Info class="h-4 w-4" />
+                        About
                     </button>
                 </div>
 
@@ -758,6 +766,132 @@
                             <p>No map data available. Start a session or filter by Session ID.</p>
                         </div>
                     {/if}
+                </div>
+            {:else if activeTab === 'about'}
+                <div class="col-span-full space-y-8 max-w-4xl mx-auto py-4">
+                    <section class="space-y-4">
+                        <h2 class="text-2xl font-bold flex items-center gap-2 border-b pb-2">
+                            <Brain class="h-6 w-6 text-primary" />
+                            How Miri's Brain Works
+                        </h2>
+                        <p class="text-muted-foreground leading-relaxed">
+                            Miri's "Brain" is a sophisticated long-term memory system designed to transform fluid conversations into structured, actionable knowledge. It operates by continuously processing interactions through several stages of synthesis and reasoning.
+                        </p>
+                        
+                        <div class="grid gap-6 md:grid-cols-2 mt-6">
+                            <Card.Root>
+                                <Card.Header>
+                                    <Card.Title class="flex items-center gap-2 text-base">
+                                        <Database class="h-4 w-4 text-blue-500" />
+                                        Factual Memories
+                                    </Card.Title>
+                                </Card.Header>
+                                <Card.Content>
+                                    <p class="text-sm text-muted-foreground">
+                                        The fundamental building blocks. These are discrete pieces of information extracted directly from user interactions, such as preferences, biographical details, or specific events.
+                                    </p>
+                                </Card.Content>
+                            </Card.Root>
+                            
+                            <Card.Root>
+                                <Card.Header>
+                                    <Card.Title class="flex items-center gap-2 text-base">
+                                        <FileText class="h-4 w-4 text-purple-500" />
+                                        Contextual Summaries
+                                    </Card.Title>
+                                </Card.Header>
+                                <Card.Content>
+                                    <p class="text-sm text-muted-foreground">
+                                        Higher-level abstractions that group related facts and conversation history into cohesive summaries, providing Miri with a "big picture" understanding of complex topics or long-term goals.
+                                    </p>
+                                </Card.Content>
+                            </Card.Root>
+                            
+                            <Card.Root>
+                                <Card.Header>
+                                    <Card.Title class="flex items-center gap-2 text-base">
+                                        <Network class="h-4 w-4 text-amber-500" />
+                                        Reasoning Topology
+                                    </Card.Title>
+                                </Card.Header>
+                                <Card.Content>
+                                    <p class="text-sm text-muted-foreground">
+                                        The map of relationships between thoughts. Miri uses <strong>Evidence</strong>, <strong>Deduction</strong>, and <strong>Refinement</strong> to link different memories, allowing her to "reason" through your history and draw new insights.
+                                    </p>
+                                </Card.Content>
+                            </Card.Root>
+                            
+                            <Card.Root>
+                                <Card.Header>
+                                    <Card.Title class="flex items-center gap-2 text-base">
+                                        <Zap class="h-4 w-4 text-primary" />
+                                        Active Retrieval
+                                    </Card.Title>
+                                </Card.Header>
+                                <Card.Content>
+                                    <p class="text-sm text-muted-foreground">
+                                        During chat, Miri performs semantic searches across these structures to pull relevant context, ensuring that her responses are always informed by what you've shared in the past.
+                                    </p>
+                                </Card.Content>
+                            </Card.Root>
+                        </div>
+                    </section>
+
+                    <section class="space-y-4 pt-4">
+                        <h2 class="text-2xl font-bold flex items-center gap-2 border-b pb-2">
+                            <Fingerprint class="h-6 w-6 text-primary" />
+                            Core Assumptions
+                        </h2>
+                        <div class="space-y-4">
+                            <div class="flex gap-4">
+                                <div class="mt-1 h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                    <div class="h-2 w-2 rounded-full bg-primary"></div>
+                                </div>
+                                <div>
+                                    <h4 class="font-semibold text-sm">Persistence is Priority</h4>
+                                    <p class="text-sm text-muted-foreground mt-1">
+                                        Information is assumed to be relevant until explicitly corrected or superseded. Miri favors consistency and builds upon previous knowledge rather than treating every session as a blank slate.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-4">
+                                <div class="mt-1 h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                    <div class="h-2 w-2 rounded-full bg-primary"></div>
+                                </div>
+                                <div>
+                                    <h4 class="font-semibold text-sm">Confidence-Weighted Reasoning</h4>
+                                    <p class="text-sm text-muted-foreground mt-1">
+                                        Every node in the brain has a confidence score. High-confidence facts (like your name) anchor the reasoning process, while lower-confidence deductions are treated as hypotheses to be verified.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-4">
+                                <div class="mt-1 h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                    <div class="h-2 w-2 rounded-full bg-primary"></div>
+                                </div>
+                                <div>
+                                    <h4 class="font-semibold text-sm">Semantic Connectivity</h4>
+                                    <p class="text-sm text-muted-foreground mt-1">
+                                        The brain assumes that related information should be linked. Relationships (bonds) are not just metadata—they are functional pathways that allow Miri to traverse from one thought to another during reasoning.
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <div class="flex gap-4">
+                                <div class="mt-1 h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                    <div class="h-2 w-2 rounded-full bg-primary"></div>
+                                </div>
+                                <div>
+                                    <h4 class="font-semibold text-sm">Privacy by Isolation</h4>
+                                    <p class="text-sm text-muted-foreground mt-1">
+                                        Miri assumes that "Brain" data is personal and session-specific. While the underlying logic is shared, the factual content is isolated to your unique profile and interaction history.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             {/if}
         </div>
