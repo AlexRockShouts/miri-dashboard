@@ -3,7 +3,7 @@
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { Button } from "$lib/components/ui/button";
-	import { MessageSquare, LayoutDashboard, Cpu, Brain as BrainIcon } from "lucide-svelte";
+	import { MessageSquare, LayoutDashboard, Cpu, Brain as BrainIcon, Layers } from "lucide-svelte";
 	import { page } from "$app/state";
 
 	onMount(() => {
@@ -33,6 +33,15 @@
 				>
 					<MessageSquare class="h-4 w-4" />
 					Prompt
+				</Button>
+				<Button
+					variant={page.url.pathname.startsWith('/subagents') ? "default" : "ghost"}
+					size="sm"
+					class="gap-2"
+					href="/subagents"
+				>
+					<Layers class="h-4 w-4" />
+					Sub-Agents
 				</Button>
 				<Button
 					variant={page.url.pathname.startsWith('/admin') ? "default" : "ghost"}

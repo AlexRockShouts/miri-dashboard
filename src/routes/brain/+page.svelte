@@ -194,28 +194,32 @@
     );
 
     let relatedNodes = $derived.by(() => {
-        if (!selectedNodeId || !data.topology) return null;
+        const topology = data.topology;
+        if (!selectedNodeId || !topology || !topology.nodes || !topology.edges) return null;
         
-        const node = data.topology.nodes.find(n => n.id === selectedNodeId);
+        const nodes = topology.nodes;
+        const edges = topology.edges;
+
+        const node = nodes.find(n => n.id === selectedNodeId);
         if (!node) return null;
 
         // Find incoming and outgoing edges for this node
-        const outgoing = data.topology.edges.filter(e => e.from === selectedNodeId);
-        const incoming = data.topology.edges.filter(e => e.to === selectedNodeId);
+        const outgoing = edges.filter(e => e.from === selectedNodeId);
+        const incoming = edges.filter(e => e.to === selectedNodeId);
 
         return {
             node,
             evidence: [
-                ...incoming.filter(e => e.bond === 'E').map(e => ({ node: data.topology.nodes.find(n => n.id === e.from), edge: e })),
-                ...outgoing.filter(e => e.bond === 'E').map(e => ({ node: data.topology.nodes.find(n => n.id === e.to), edge: e }))
+                ...incoming.filter(e => String(e.bond) === 'E').map(e => ({ node: nodes.find(n => n.id === e.from), edge: e })),
+                ...outgoing.filter(e => String(e.bond) === 'E').map(e => ({ node: nodes.find(n => n.id === e.to), edge: e }))
             ].filter(r => r.node),
             deducements: [
-                ...incoming.filter(e => e.bond === 'D').map(e => ({ node: data.topology.nodes.find(n => n.id === e.from), edge: e })),
-                ...outgoing.filter(e => e.bond === 'D').map(e => ({ node: data.topology.nodes.find(n => n.id === e.to), edge: e }))
+                ...incoming.filter(e => String(e.bond) === 'D').map(e => ({ node: nodes.find(n => n.id === e.from), edge: e })),
+                ...outgoing.filter(e => String(e.bond) === 'D').map(e => ({ node: nodes.find(n => n.id === e.to), edge: e }))
             ].filter(r => r.node),
             refinements: [
-                ...incoming.filter(e => e.bond === 'R').map(e => ({ node: data.topology.nodes.find(n => n.id === e.from), edge: e })),
-                ...outgoing.filter(e => e.bond === 'R').map(e => ({ node: data.topology.nodes.find(n => n.id === e.to), edge: e }))
+                ...incoming.filter(e => String(e.bond) === 'R').map(e => ({ node: nodes.find(n => n.id === e.from), edge: e })),
+                ...outgoing.filter(e => String(e.bond) === 'R').map(e => ({ node: nodes.find(n => n.id === e.to), edge: e }))
             ].filter(r => r.node)
         };
     });
@@ -491,9 +495,9 @@
                             {#each data.topology.nodes as node}
                                 <Card.Root class="border-l-4 border-l-primary/50 relative overflow-hidden group">
                                     <div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-30 transition-opacity">
-                                        {#if node.meta?.type === 'fact'}
+                                        {#if String(node.meta?.type) === 'fact'}
                                             <Database class="h-8 w-8" />
-                                        {:else if node.meta?.type === 'summary'}
+                                        {:else if String(node.meta?.type) === 'summary'}
                                             <FileText class="h-8 w-8" />
                                         {:else}
                                             <Zap class="h-8 w-8" />
@@ -541,7 +545,7 @@
                                             <span class="font-mono text-primary truncate max-w-[80px]" title={edge.from}>{edge.from?.split('-').pop()}</span>
                                             <div class="flex-1 border-t-2 border-dashed border-muted-foreground/30 relative flex justify-center">
                                                 <Badge variant="outline" class="absolute -top-2.5 px-1 py-0 h-4 text-[9px] bg-background">
-                                                    {edge.bond === 'D' ? 'Deduce' : edge.bond === 'R' ? 'Refine' : edge.bond === 'E' ? 'Evidence' : edge.bond}
+                                                    {String(edge.bond) === 'D' ? 'Deduce' : String(edge.bond) === 'R' ? 'Refine' : String(edge.bond) === 'E' ? 'Evidence' : String(edge.bond)}
                                                 </Badge>
                                             </div>
                                             <span class="font-mono text-primary truncate max-w-[80px]" title={edge.to}>{edge.to?.split('-').pop()}</span>
@@ -591,11 +595,11 @@
                                             {#each relatedNodes.evidence as rel}
                                                 <button 
                                                     class="w-full text-left p-3 rounded-lg bg-blue-500/5 border border-blue-100 hover:border-blue-300 transition-all group"
-                                                    onclick={() => selectedNodeId = rel.node.id}
+                                                    onclick={() => selectedNodeId = rel.node?.id || null}
                                                 >
-                                                    <p class="text-xs line-clamp-3 group-hover:line-clamp-none transition-all">{rel.node.content}</p>
+                                                    <p class="text-xs line-clamp-3 group-hover:line-clamp-none transition-all">{rel.node?.content}</p>
                                                     <div class="mt-2 flex items-center justify-between">
-                                                        <span class="text-[9px] font-mono opacity-50">#{rel.node.id.split('-').pop()}</span>
+                                                        <span class="text-[9px] font-mono opacity-50">#{rel.node?.id?.split('-').pop()}</span>
                                                         {#if rel.edge.from === selectedNodeId}
                                                             <ArrowDown class="h-3 w-3 opacity-30 group-hover:translate-y-0.5 transition-transform" />
                                                         {:else}
@@ -617,11 +621,11 @@
                                             {#each relatedNodes.deducements as rel}
                                                 <button 
                                                     class="w-full text-left p-3 rounded-lg bg-purple-500/5 border border-purple-100 hover:border-purple-300 transition-all group"
-                                                    onclick={() => selectedNodeId = rel.node.id}
+                                                    onclick={() => selectedNodeId = rel.node?.id || null}
                                                 >
-                                                    <p class="text-xs line-clamp-3 group-hover:line-clamp-none transition-all">{rel.node.content}</p>
+                                                    <p class="text-xs line-clamp-3 group-hover:line-clamp-none transition-all">{rel.node?.content}</p>
                                                     <div class="mt-2 flex items-center justify-between">
-                                                        <span class="text-[9px] font-mono opacity-50">#{rel.node.id.split('-').pop()}</span>
+                                                        <span class="text-[9px] font-mono opacity-50">#{rel.node?.id?.split('-').pop()}</span>
                                                         {#if rel.edge.from === selectedNodeId}
                                                             <ArrowDown class="h-3 w-3 opacity-30 group-hover:translate-y-0.5 transition-transform" />
                                                         {:else}
@@ -643,11 +647,11 @@
                                             {#each relatedNodes.refinements as rel}
                                                 <button 
                                                     class="w-full text-left p-3 rounded-lg bg-amber-500/5 border border-amber-100 hover:border-amber-300 transition-all group"
-                                                    onclick={() => selectedNodeId = rel.node.id}
+                                                    onclick={() => selectedNodeId = rel.node?.id || null}
                                                 >
-                                                    <p class="text-xs line-clamp-3 group-hover:line-clamp-none transition-all">{rel.node.content}</p>
+                                                    <p class="text-xs line-clamp-3 group-hover:line-clamp-none transition-all">{rel.node?.content}</p>
                                                     <div class="mt-2 flex items-center justify-between">
-                                                        <span class="text-[9px] font-mono opacity-50">#{rel.node.id.split('-').pop()}</span>
+                                                        <span class="text-[9px] font-mono opacity-50">#{rel.node?.id?.split('-').pop()}</span>
                                                         {#if rel.edge.from === selectedNodeId}
                                                             <ArrowDown class="h-3 w-3 opacity-30 group-hover:translate-y-0.5 transition-transform" />
                                                         {:else}
@@ -676,25 +680,25 @@
                                             {@const toNode = data.topology?.nodes?.find(n => n.id === edge.to)}
                                             
                                             <!-- Logic Colors: Evidence (blue), Deduce (purple), Refine (amber) -->
-                                            {@const logicColor = edge.bond === 'E' ? 'blue' : edge.bond === 'D' ? 'purple' : edge.bond === 'R' ? 'amber' : 'slate'}
-                                            {@const logicLabel = edge.bond === 'E' ? 'Evidence' : edge.bond === 'D' ? 'Deduce' : edge.bond === 'R' ? 'Refine' : edge.bond}
+                                            {@const logicColor = String(edge.bond) === 'E' ? 'blue' : String(edge.bond) === 'D' ? 'purple' : String(edge.bond) === 'R' ? 'amber' : 'slate'}
+                                            {@const logicLabel = String(edge.bond) === 'E' ? 'Evidence' : String(edge.bond) === 'D' ? 'Deduce' : String(edge.bond) === 'R' ? 'Refine' : String(edge.bond)}
                                             
                                             <div class="flex flex-col bg-background border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                                                 <div class="flex items-stretch gap-0 border-b min-h-[120px]">
                                                     <button 
                                                         class="flex-1 p-4 text-xs bg-muted/20 hover:bg-muted/30 transition-colors text-left"
-                                                        onclick={() => selectedNodeId = edge.from}
+                                                        onclick={() => selectedNodeId = edge.from || null}
                                                     >
                                                         <div class="flex items-center gap-1.5 mb-2 opacity-60 uppercase text-[9px] font-bold">
-                                                            {#if fromNode?.meta?.type === 'fact'}<Database class="h-3 w-3" />Fact{/if}
-                                                            {#if fromNode?.meta?.type === 'summary'}<FileText class="h-3 w-3" />Summary{/if}
+                                                            {#if String(fromNode?.meta?.type) === 'fact'}<Database class="h-3 w-3" />Fact{/if}
+                                                            {#if String(fromNode?.meta?.type) === 'summary'}<FileText class="h-3 w-3" />Summary{/if}
                                                             #{edge.from?.split('-').pop()}
                                                         </div>
                                                         <p class="line-clamp-3 leading-relaxed">{fromNode?.content || 'Unknown Source'}</p>
                                                     </button>
                                                     
                                                     <div class="w-20 flex flex-col items-center justify-center bg-muted/40 relative px-2">
-                                                        {#if edge.bond === 'E'}
+                                                        {#if String(edge.bond) === 'E'}
                                                             <div class="w-full h-0.5 border-t-2 border-dashed border-blue-400/50"></div>
                                                             <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
                                                                 <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse translate-y-[1px]"></div>
@@ -702,7 +706,7 @@
                                                             <Badge variant="outline" class="text-[9px] absolute -top-2.5 bg-background px-1.5 py-0 h-5 border-blue-300 text-blue-700 font-bold uppercase shadow-sm">
                                                                 Evidence
                                                             </Badge>
-                                                        {:else if edge.bond === 'D'}
+                                                        {:else if String(edge.bond) === 'D'}
                                                             <div class="w-full h-0.5 border-t-2 border-dashed border-purple-400/50"></div>
                                                             <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
                                                                 <div class="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[10px] border-b-purple-500 translate-y-[1px]"></div>
@@ -710,7 +714,7 @@
                                                             <Badge variant="outline" class="text-[9px] absolute -top-2.5 bg-background px-1.5 py-0 h-5 border-purple-300 text-purple-700 font-bold uppercase shadow-sm">
                                                                 Deduce
                                                             </Badge>
-                                                        {:else if edge.bond === 'R'}
+                                                        {:else if String(edge.bond) === 'R'}
                                                             <div class="w-full h-0.5 border-t-2 border-dashed border-amber-400/50"></div>
                                                             <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
                                                                 <div class="w-2.5 h-2.5 bg-amber-500 rotate-45 translate-y-[1px]"></div>
@@ -721,23 +725,23 @@
                                                         {:else}
                                                             <div class="w-full h-0.5 border-t-2 border-dashed border-slate-400/50"></div>
                                                             <Badge variant="outline" class="text-[9px] absolute -top-2.5 bg-background px-1.5 py-0 h-5 border-slate-300 text-slate-700 font-bold uppercase shadow-sm">
-                                                                {edge.bond}
+                                                                {String(edge.bond)}
                                                             </Badge>
                                                         {/if}
                                                     </div>
 
                                                     <button 
                                                         class="flex-1 p-4 text-xs text-left transition-colors
-                                                        {edge.bond === 'E' ? 'bg-blue-500/5 hover:bg-blue-500/10' : 
-                                                         edge.bond === 'D' ? 'bg-purple-500/5 hover:bg-purple-500/10' : 
-                                                         edge.bond === 'R' ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'bg-slate-500/5 hover:bg-slate-500/10'}"
-                                                        onclick={() => selectedNodeId = edge.to}
+                                                       {String(edge.bond) === 'E' ? 'bg-blue-500/5 hover:bg-blue-500/10' : 
+                                                        String(edge.bond) === 'D' ? 'bg-purple-500/5 hover:bg-purple-500/10' : 
+                                                        String(edge.bond) === 'R' ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'bg-slate-500/5 hover:bg-slate-500/10'}"
+                                                        onclick={() => selectedNodeId = edge.to || null}
                                                     >
                                                         <div class="flex items-center gap-1.5 mb-2 opacity-60 uppercase text-[9px] font-bold 
-                                                            {edge.bond === 'E' ? 'text-blue-700' : 
-                                                             edge.bond === 'D' ? 'text-purple-700' : 
-                                                             edge.bond === 'R' ? 'text-amber-700' : 'text-slate-700'}">
-                                                            {#if toNode?.meta?.type === 'summary'}<FileText class="h-3 w-3" />Summary{:else}<Zap class="h-3 w-3" />Reasoning{/if}
+                                                            {String(edge.bond) === 'E' ? 'text-blue-700' : 
+                                                             String(edge.bond) === 'D' ? 'text-purple-700' : 
+                                                             String(edge.bond) === 'R' ? 'text-amber-700' : 'text-slate-700'}">
+                                                            {#if String(toNode?.meta?.type) === 'summary'}<FileText class="h-3 w-3" />Summary{:else}<Zap class="h-3 w-3" />Reasoning{/if}
                                                             #{edge.to?.split('-').pop()}
                                                         </div>
                                                         <p class="line-clamp-3 leading-relaxed font-medium">{toNode?.content || 'Unknown Target'}</p>
@@ -746,7 +750,7 @@
                                                 
                                                 <div class="px-4 py-2 bg-muted/10 flex items-center justify-between">
                                                     <span class="text-[10px] text-muted-foreground italic">
-                                                        {#if edge.bond === 'E'}Supporting evidence for the insight{:else if edge.bond === 'D'}Logical derivation from facts{:else if edge.bond === 'R'}Refining existing knowledge{/if}
+                                                        {#if String(edge.bond) === 'E'}Supporting evidence for the insight{:else if String(edge.bond) === 'D'}Logical derivation from facts{:else if String(edge.bond) === 'R'}Refining existing knowledge{/if}
                                                     </span>
                                                     {#if toNode?.meta?.confidence}
                                                         <Badge variant="secondary" class="text-[8px] h-3 px-1">
