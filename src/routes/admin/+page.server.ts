@@ -16,7 +16,6 @@ export interface AdminData {
     health: ApiAdminV1HealthGet200Response | null;
     config: Config | null;
     sessions: string[];
-    humans: Human[];
     tasks: Task[];
     skills: Skill[];
     error?: string;
@@ -35,11 +34,10 @@ export const load: PageServerLoad = async (): Promise<AdminData> => {
     const defaultApi = new DefaultApi(config);
 
     try {
-        const [healthRes, configRes, sessionsRes, humansRes, tasksRes, skillsRes] = await Promise.all([
+        const [healthRes, configRes, sessionsRes, tasksRes, skillsRes] = await Promise.all([
             defaultApi.apiAdminV1HealthGet(),
             defaultApi.apiAdminV1ConfigGet(),
             defaultApi.apiAdminV1SessionsGet(100, 0),
-            defaultApi.apiAdminV1HumanGet(),
             defaultApi.apiAdminV1TasksGet(100, 0),
             defaultApi.apiAdminV1SkillsGet(100, 0)
         ]);
@@ -48,7 +46,6 @@ export const load: PageServerLoad = async (): Promise<AdminData> => {
             health: healthRes.data,
             config: configRes.data,
             sessions: sessionsRes.data.data as string[],
-            humans: [humansRes.data],
             tasks: tasksRes.data.data as Task[],
             skills: skillsRes.data.data as Skill[]
         };
@@ -59,7 +56,6 @@ export const load: PageServerLoad = async (): Promise<AdminData> => {
             health: null,
             config: null,
             sessions: [],
-            humans: [],
             tasks: [],
             skills: []
         };
@@ -92,24 +88,15 @@ export const actions = {
             const response = await defaultApi.apiAdminV1SessionsIdHistoryGet(sessionId, 100, 0);
             const historyData = response.data as PaginatedHistory;
 
-            // Normalize messages to SDK shape: { role, content }
+            // The SDK Message interface now specifically uses 'prompt' and 'response'
             let normalized: { role: string; content: string }[] = [];
             const msgs = Array.isArray(historyData?.messages) ? historyData.messages : [];
-            for (const m of msgs) {
-                const message = m as any;
-                // If already in role/content form, keep as is
-                if (message && (typeof message.role === 'string' || typeof message.content === 'string')) {
-                    if (message.content && message.content.trim()) {
-                        normalized.push({ role: (message.role || 'assistant') as string, content: message.content as string });
-                    }
-                    continue;
+            for (const message of msgs) {
+                if (message.prompt && message.prompt.trim()) {
+                    normalized.push({ role: 'user', content: message.prompt });
                 }
-                // Fallback: map { prompt, response } to two messages
-                if (message?.prompt && String(message.prompt).trim()) {
-                    normalized.push({ role: 'user', content: String(message.prompt) });
-                }
-                if (message?.response && String(message.response).trim()) {
-                    normalized.push({ role: 'assistant', content: String(message.response) });
+                if (message.response && message.response.trim()) {
+                    normalized.push({ role: 'assistant', content: message.response });
                 }
             }
 
@@ -117,6 +104,38 @@ export const actions = {
         } catch (e: any) {
             console.error(`Failed to fetch history for session ${sessionId}:`, e.message);
             return { error: e.message || 'Could not fetch session history' };
+        }
+    },
+
+    enrollChannel: async ({ request }) => {
+        const data = await request.formData();
+        const channel = data.get('channel') as string;
+        const action = data.get('action') as string;
+
+        if (!channel || !action) {
+            return { error: 'Channel and action are required' };
+        }
+
+        const config = new Configuration({
+            basePath: PUBLIC_MIRI_SERVER_URL,
+            baseOptions: {
+                headers: {
+                    'X-Server-Key': PUBLIC_MIRI_SERVER_KEY,
+                    'Authorization': 'Basic ' + Buffer.from(`${MIRI_ADMIN_USER}:${MIRI_ADMIN_PASSWORD}`).toString('base64')
+                }
+            }
+        });
+        const defaultApi = new DefaultApi(config);
+
+        try {
+            const response = await defaultApi.apiAdminV1ChannelsPost({
+                channel: channel,
+                action: action as any // Use the correct action enum
+            });
+            return { success: true, result: response.data };
+        } catch (e: any) {
+            console.error(`Failed to execute channel action ${action} on ${channel}:`, e.message);
+            return { error: e.message || `Could not execute ${action} on ${channel}` };
         }
     }
 };

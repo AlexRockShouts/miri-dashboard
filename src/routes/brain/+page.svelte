@@ -9,16 +9,18 @@
     
     let { data } = $props() as { data: BrainData };
     
-    let activeTab = $state<'facts' | 'summaries' | 'topology'>('facts');
-    let searchQuery = $state("");
-    let sessionFilter = $state("");
-    let sortBy = $state<string>("content");
-    let sortOrder = $state<'asc' | 'desc'>('asc');
-    let selectedCategory = $state<string>("all");
+    let activeTab = $state<'facts' | 'summaries' | 'topology' | 'map'>('facts');
     
     // Pagination state (synced with URL)
     let currentPage = $state(data.page || 1);
-    const pageSize = data.pageSize || 12;
+    const pageSize = data.pageSize || 50;
+
+    function goToTab(tab: 'facts' | 'summaries' | 'topology' | 'map') {
+        activeTab = tab;
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', tab);
+        window.history.replaceState({}, '', url.toString());
+    }
 
     function goToPage(page: number) {
         const url = new URL(window.location.href);
@@ -118,9 +120,22 @@
         currentPage = 1;
     });
 
+    let searchQuery = $state("");
+    let sessionFilter = $state("");
+    let sortBy = $state<string>("content");
+    let sortOrder = $state<'asc' | 'desc'>('asc');
+    let selectedCategory = $state<string>("all");
+    let selectedNodeId = $state<string | null>(null);
+
     onMount(() => {
-        // Check if we should switch to topology tab for this session
+        // Check if we should switch to a specific tab from the URL
         const urlParams = new URLSearchParams(window.location.search);
+        const tab = urlParams.get('tab') as 'facts' | 'summaries' | 'topology' | 'map' | null;
+        if (tab && ['facts', 'summaries', 'topology', 'map'].includes(tab)) {
+            activeTab = tab;
+        }
+
+        // Check if we should switch to topology tab for this session
         const sessionId = urlParams.get('session_id');
         if (sessionId) {
             sessionFilter = sessionId;
@@ -165,14 +180,45 @@
             .sort(compareValues)
     );
 
-    let paginatedFacts = $derived(filteredFacts);
-    let paginatedSummaries = $derived(filteredSummaries);
+    let paginatedFacts = $derived(
+        filteredFacts.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+    );
+    let paginatedSummaries = $derived(
+        filteredSummaries.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+    );
 
     let totalPages = $derived(
         activeTab === 'facts' 
             ? Math.ceil(filteredFacts.length / pageSize) 
             : Math.ceil(filteredSummaries.length / pageSize)
     );
+
+    let relatedNodes = $derived.by(() => {
+        if (!selectedNodeId || !data.topology) return null;
+        
+        const node = data.topology.nodes.find(n => n.id === selectedNodeId);
+        if (!node) return null;
+
+        // Find incoming and outgoing edges for this node
+        const outgoing = data.topology.edges.filter(e => e.from === selectedNodeId);
+        const incoming = data.topology.edges.filter(e => e.to === selectedNodeId);
+
+        return {
+            node,
+            evidence: [
+                ...incoming.filter(e => e.bond === 'E').map(e => ({ node: data.topology.nodes.find(n => n.id === e.from), edge: e })),
+                ...outgoing.filter(e => e.bond === 'E').map(e => ({ node: data.topology.nodes.find(n => n.id === e.to), edge: e }))
+            ].filter(r => r.node),
+            deducements: [
+                ...incoming.filter(e => e.bond === 'D').map(e => ({ node: data.topology.nodes.find(n => n.id === e.from), edge: e })),
+                ...outgoing.filter(e => e.bond === 'D').map(e => ({ node: data.topology.nodes.find(n => n.id === e.to), edge: e }))
+            ].filter(r => r.node),
+            refinements: [
+                ...incoming.filter(e => e.bond === 'R').map(e => ({ node: data.topology.nodes.find(n => n.id === e.from), edge: e })),
+                ...outgoing.filter(e => e.bond === 'R').map(e => ({ node: data.topology.nodes.find(n => n.id === e.to), edge: e }))
+            ].filter(r => r.node)
+        };
+    });
 
     function tryParseJson(str: string | undefined) {
         if (!str) return null;
@@ -224,10 +270,13 @@
 
     function handleRefresh() {
         // Clear session ID and page from URL to get a clean refresh of everything
+        // But keep the tab
         const url = new URL(window.location.href);
+        const currentTab = url.searchParams.get('tab');
         url.searchParams.delete('page');
         url.searchParams.delete('session_id');
-        window.location.href = url.pathname;
+        if (currentTab) url.searchParams.set('tab', currentTab);
+        window.location.href = url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : '');
     }
 </script>
 
@@ -270,7 +319,7 @@
                     <button 
                         class="px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-2
                         {activeTab === 'facts' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'}"
-                        onclick={() => activeTab = 'facts'}
+                        onclick={() => goToTab('facts')}
                     >
                         <Database class="h-4 w-4" />
                         Facts
@@ -281,7 +330,7 @@
                     <button 
                         class="px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-2
                         {activeTab === 'summaries' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'}"
-                        onclick={() => activeTab = 'summaries'}
+                        onclick={() => goToTab('summaries')}
                     >
                         <FileText class="h-4 w-4" />
                         Summaries
@@ -292,13 +341,21 @@
                     <button 
                         class="px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-2
                         {activeTab === 'topology' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'}"
-                        onclick={() => activeTab = 'topology'}
+                        onclick={() => goToTab('topology')}
                     >
                         <Network class="h-4 w-4" />
                         Topology
                         <Badge variant={activeTab === 'topology' ? 'secondary' : 'outline'} class="ml-1 px-1.5 py-0 text-[10px]">
                             {data.topology?.nodes?.length || 0}
                         </Badge>
+                    </button>
+                    <button 
+                        class="px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-2
+                        {activeTab === 'map' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-muted-foreground'}"
+                        onclick={() => goToTab('map')}
+                    >
+                        <Brain class="h-4 w-4" />
+                        Brain Map
                     </button>
                 </div>
 
@@ -424,7 +481,16 @@
                     <div class="col-span-full space-y-6">
                         <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                             {#each data.topology.nodes as node}
-                                <Card.Root class="border-l-4 border-l-primary/50">
+                                <Card.Root class="border-l-4 border-l-primary/50 relative overflow-hidden group">
+                                    <div class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-30 transition-opacity">
+                                        {#if node.meta?.type === 'fact'}
+                                            <Database class="h-8 w-8" />
+                                        {:else if node.meta?.type === 'summary'}
+                                            <FileText class="h-8 w-8" />
+                                        {:else}
+                                            <Zap class="h-8 w-8" />
+                                        {/if}
+                                    </div>
                                     <Card.Header class="pb-2">
                                         <div class="flex items-center justify-between gap-2">
                                             <Badge variant="outline" class="font-mono text-[10px] uppercase truncate max-w-[150px]">
@@ -483,15 +549,225 @@
                         <p>No topology data available.</p>
                     </div>
                 {/if}
+            {:else if activeTab === 'map'}
+                <div class="col-span-full flex flex-col items-center py-10 text-center">
+                    <Brain class="h-16 w-16 text-primary mb-4 animate-pulse" />
+                    <h2 class="text-2xl font-bold mb-2">Integrated Brain Map</h2>
+                    <p class="text-muted-foreground max-w-md mb-8">
+                        Visualizing the relationships between Factual Memories, Summaries, and Reasoning Chains.
+                    </p>
+
+                    {#if data.topology && data.topology.nodes && data.topology.nodes.length > 0}
+                        <div class="w-full max-w-6xl space-y-12">
+                            <!-- Node Detail / Focused View -->
+                            {#if selectedNodeId && relatedNodes}
+                                <div class="bg-card border-2 border-primary/20 rounded-2xl p-6 shadow-xl relative overflow-hidden text-left animate-in fade-in zoom-in duration-300">
+                                    <div class="absolute top-0 right-0 p-4">
+                                        <Button variant="ghost" size="sm" onclick={() => selectedNodeId = null}>✕ Close</Button>
+                                    </div>
+                                    
+                                    <div class="flex items-center gap-2 mb-4">
+                                        <Badge class="bg-primary/10 text-primary border-primary/20">Selected Node</Badge>
+                                        <span class="text-xs font-mono opacity-50">#{selectedNodeId.split('-').pop()}</span>
+                                    </div>
+                                    
+                                    <h3 class="text-xl font-semibold mb-6 pr-20">{relatedNodes.node.content}</h3>
+                                    
+                                    <div class="grid gap-6 md:grid-cols-3">
+                                        <!-- Evidence Section -->
+                                        <div class="space-y-3">
+                                            <div class="flex items-center gap-2 text-blue-600 font-bold uppercase text-[10px] tracking-wider border-b border-blue-100 pb-2">
+                                                <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                                                Evidence ({relatedNodes.evidence.length})
+                                            </div>
+                                            {#each relatedNodes.evidence as rel}
+                                                <button 
+                                                    class="w-full text-left p-3 rounded-lg bg-blue-500/5 border border-blue-100 hover:border-blue-300 transition-all group"
+                                                    onclick={() => selectedNodeId = rel.node.id}
+                                                >
+                                                    <p class="text-xs line-clamp-3 group-hover:line-clamp-none transition-all">{rel.node.content}</p>
+                                                    <div class="mt-2 flex items-center justify-between">
+                                                        <span class="text-[9px] font-mono opacity-50">#{rel.node.id.split('-').pop()}</span>
+                                                        {#if rel.edge.from === selectedNodeId}
+                                                            <ArrowDown class="h-3 w-3 opacity-30 group-hover:translate-y-0.5 transition-transform" />
+                                                        {:else}
+                                                            <ArrowUp class="h-3 w-3 opacity-30 group-hover:-translate-y-0.5 transition-transform" />
+                                                        {/if}
+                                                    </div>
+                                                </button>
+                                            {:else}
+                                                <p class="text-xs text-muted-foreground italic">No evidence linked.</p>
+                                            {/each}
+                                        </div>
+
+                                        <!-- Deducement Section -->
+                                        <div class="space-y-3">
+                                            <div class="flex items-center gap-2 text-purple-600 font-bold uppercase text-[10px] tracking-wider border-b border-purple-100 pb-2">
+                                                <div class="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-b-[7px] border-b-purple-500"></div>
+                                                Deducements ({relatedNodes.deducements.length})
+                                            </div>
+                                            {#each relatedNodes.deducements as rel}
+                                                <button 
+                                                    class="w-full text-left p-3 rounded-lg bg-purple-500/5 border border-purple-100 hover:border-purple-300 transition-all group"
+                                                    onclick={() => selectedNodeId = rel.node.id}
+                                                >
+                                                    <p class="text-xs line-clamp-3 group-hover:line-clamp-none transition-all">{rel.node.content}</p>
+                                                    <div class="mt-2 flex items-center justify-between">
+                                                        <span class="text-[9px] font-mono opacity-50">#{rel.node.id.split('-').pop()}</span>
+                                                        {#if rel.edge.from === selectedNodeId}
+                                                            <ArrowDown class="h-3 w-3 opacity-30 group-hover:translate-y-0.5 transition-transform" />
+                                                        {:else}
+                                                            <ArrowUp class="h-3 w-3 opacity-30 group-hover:-translate-y-0.5 transition-transform" />
+                                                        {/if}
+                                                    </div>
+                                                </button>
+                                            {:else}
+                                                <p class="text-xs text-muted-foreground italic">No deducements linked.</p>
+                                            {/each}
+                                        </div>
+
+                                        <!-- Refinement Section -->
+                                        <div class="space-y-3">
+                                            <div class="flex items-center gap-2 text-amber-600 font-bold uppercase text-[10px] tracking-wider border-b border-amber-100 pb-2">
+                                                <div class="w-2 h-2 bg-amber-500 rotate-45"></div>
+                                                Refinements ({relatedNodes.refinements.length})
+                                            </div>
+                                            {#each relatedNodes.refinements as rel}
+                                                <button 
+                                                    class="w-full text-left p-3 rounded-lg bg-amber-500/5 border border-amber-100 hover:border-amber-300 transition-all group"
+                                                    onclick={() => selectedNodeId = rel.node.id}
+                                                >
+                                                    <p class="text-xs line-clamp-3 group-hover:line-clamp-none transition-all">{rel.node.content}</p>
+                                                    <div class="mt-2 flex items-center justify-between">
+                                                        <span class="text-[9px] font-mono opacity-50">#{rel.node.id.split('-').pop()}</span>
+                                                        {#if rel.edge.from === selectedNodeId}
+                                                            <ArrowDown class="h-3 w-3 opacity-30 group-hover:translate-y-0.5 transition-transform" />
+                                                        {:else}
+                                                            <ArrowUp class="h-3 w-3 opacity-30 group-hover:-translate-y-0.5 transition-transform" />
+                                                        {/if}
+                                                    </div>
+                                                </button>
+                                            {:else}
+                                                <p class="text-xs text-muted-foreground italic">No refinements linked.</p>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                </div>
+                            {/if}
+
+                            <!-- Connection Explorer -->
+                            {#if data.topology.edges && data.topology.edges.length > 0}
+                                <div class="pt-8">
+                                    <h3 class="text-2xl font-semibold mb-6 flex items-center gap-2 justify-center">
+                                        <Network class="h-6 w-6 text-primary" />
+                                        Factual Lineage
+                                    </h3>
+                                    <div class="grid gap-6 md:grid-cols-2">
+                                        {#each data.topology.edges as edge}
+                                            {@const fromNode = data.topology?.nodes?.find(n => n.id === edge.from)}
+                                            {@const toNode = data.topology?.nodes?.find(n => n.id === edge.to)}
+                                            
+                                            <!-- Logic Colors: Evidence (blue), Deduce (purple), Refine (amber) -->
+                                            {@const logicColor = edge.bond === 'E' ? 'blue' : edge.bond === 'D' ? 'purple' : edge.bond === 'R' ? 'amber' : 'slate'}
+                                            {@const logicLabel = edge.bond === 'E' ? 'Evidence' : edge.bond === 'D' ? 'Deduce' : edge.bond === 'R' ? 'Refine' : edge.bond}
+                                            
+                                            <div class="flex flex-col bg-background border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                                                <div class="flex items-stretch gap-0 border-b min-h-[120px]">
+                                                    <button 
+                                                        class="flex-1 p-4 text-xs bg-muted/20 hover:bg-muted/30 transition-colors text-left"
+                                                        onclick={() => selectedNodeId = edge.from}
+                                                    >
+                                                        <div class="flex items-center gap-1.5 mb-2 opacity-60 uppercase text-[9px] font-bold">
+                                                            {#if fromNode?.meta?.type === 'fact'}<Database class="h-3 w-3" />Fact{/if}
+                                                            {#if fromNode?.meta?.type === 'summary'}<FileText class="h-3 w-3" />Summary{/if}
+                                                            #{edge.from?.split('-').pop()}
+                                                        </div>
+                                                        <p class="line-clamp-3 leading-relaxed">{fromNode?.content || 'Unknown Source'}</p>
+                                                    </button>
+                                                    
+                                                    <div class="w-20 flex flex-col items-center justify-center bg-muted/40 relative px-2">
+                                                        {#if edge.bond === 'E'}
+                                                            <div class="w-full h-0.5 border-t-2 border-dashed border-blue-400/50"></div>
+                                                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                                <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse translate-y-[1px]"></div>
+                                                            </div>
+                                                            <Badge variant="outline" class="text-[9px] absolute -top-2.5 bg-background px-1.5 py-0 h-5 border-blue-300 text-blue-700 font-bold uppercase shadow-sm">
+                                                                Evidence
+                                                            </Badge>
+                                                        {:else if edge.bond === 'D'}
+                                                            <div class="w-full h-0.5 border-t-2 border-dashed border-purple-400/50"></div>
+                                                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                                <div class="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[10px] border-b-purple-500 translate-y-[1px]"></div>
+                                                            </div>
+                                                            <Badge variant="outline" class="text-[9px] absolute -top-2.5 bg-background px-1.5 py-0 h-5 border-purple-300 text-purple-700 font-bold uppercase shadow-sm">
+                                                                Deduce
+                                                            </Badge>
+                                                        {:else if edge.bond === 'R'}
+                                                            <div class="w-full h-0.5 border-t-2 border-dashed border-amber-400/50"></div>
+                                                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                                <div class="w-2.5 h-2.5 bg-amber-500 rotate-45 translate-y-[1px]"></div>
+                                                            </div>
+                                                            <Badge variant="outline" class="text-[9px] absolute -top-2.5 bg-background px-1.5 py-0 h-5 border-amber-300 text-amber-700 font-bold uppercase shadow-sm">
+                                                                Refine
+                                                            </Badge>
+                                                        {:else}
+                                                            <div class="w-full h-0.5 border-t-2 border-dashed border-slate-400/50"></div>
+                                                            <Badge variant="outline" class="text-[9px] absolute -top-2.5 bg-background px-1.5 py-0 h-5 border-slate-300 text-slate-700 font-bold uppercase shadow-sm">
+                                                                {edge.bond}
+                                                            </Badge>
+                                                        {/if}
+                                                    </div>
+
+                                                    <button 
+                                                        class="flex-1 p-4 text-xs text-left transition-colors
+                                                        {edge.bond === 'E' ? 'bg-blue-500/5 hover:bg-blue-500/10' : 
+                                                         edge.bond === 'D' ? 'bg-purple-500/5 hover:bg-purple-500/10' : 
+                                                         edge.bond === 'R' ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'bg-slate-500/5 hover:bg-slate-500/10'}"
+                                                        onclick={() => selectedNodeId = edge.to}
+                                                    >
+                                                        <div class="flex items-center gap-1.5 mb-2 opacity-60 uppercase text-[9px] font-bold 
+                                                            {edge.bond === 'E' ? 'text-blue-700' : 
+                                                             edge.bond === 'D' ? 'text-purple-700' : 
+                                                             edge.bond === 'R' ? 'text-amber-700' : 'text-slate-700'}">
+                                                            {#if toNode?.meta?.type === 'summary'}<FileText class="h-3 w-3" />Summary{:else}<Zap class="h-3 w-3" />Reasoning{/if}
+                                                            #{edge.to?.split('-').pop()}
+                                                        </div>
+                                                        <p class="line-clamp-3 leading-relaxed font-medium">{toNode?.content || 'Unknown Target'}</p>
+                                                    </button>
+                                                </div>
+                                                
+                                                <div class="px-4 py-2 bg-muted/10 flex items-center justify-between">
+                                                    <span class="text-[10px] text-muted-foreground italic">
+                                                        {#if edge.bond === 'E'}Supporting evidence for the insight{:else if edge.bond === 'D'}Logical derivation from facts{:else if edge.bond === 'R'}Refining existing knowledge{/if}
+                                                    </span>
+                                                    {#if toNode?.meta?.confidence}
+                                                        <Badge variant="secondary" class="text-[8px] h-3 px-1">
+                                                            {Math.round(Number(toNode.meta.confidence) * 100)}% Confidence
+                                                        </Badge>
+                                                    {/if}
+                                                </div>
+                                            </div>
+                                        {/each}
+                                    </div>
+                                </div>
+                            {/if}
+                        </div>
+                    {:else}
+                        <div class="py-20 text-center text-muted-foreground border-2 border-dashed rounded-xl w-full">
+                            <Network class="h-10 w-10 mx-auto mb-3 opacity-20" />
+                            <p>No map data available. Start a session or filter by Session ID.</p>
+                        </div>
+                    {/if}
+                </div>
             {/if}
         </div>
 
-        {#if activeTab !== 'topology' && totalPages > 1}
+        {#if (activeTab === 'facts' || activeTab === 'summaries') && totalPages > 1}
             <div class="mt-8 flex items-center justify-between border-t pt-4">
                 <div class="text-sm text-muted-foreground">
-                    Showing <span class="font-medium">{(currentPage - 1) * pageSize + 1}</span> to 
-                    <span class="font-medium">{Math.min(currentPage * pageSize, activeTab === 'facts' ? data.totalFacts : data.totalSummaries)}</span> of 
-                    <span class="font-medium">{activeTab === 'facts' ? data.totalFacts : data.totalSummaries}</span> results
+                    Showing <span class="font-medium">{Math.min((currentPage - 1) * pageSize + 1, activeTab === 'facts' ? filteredFacts.length : filteredSummaries.length)}</span> to 
+                    <span class="font-medium">{Math.min(currentPage * pageSize, activeTab === 'facts' ? filteredFacts.length : filteredSummaries.length)}</span> of 
+                    <span class="font-medium">{activeTab === 'facts' ? filteredFacts.length : filteredSummaries.length}</span> results
                 </div>
                 <div class="flex items-center gap-2">
                     <Button 

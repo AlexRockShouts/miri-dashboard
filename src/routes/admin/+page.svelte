@@ -3,7 +3,7 @@
     import * as Table from "$lib/components/ui/table";
     import { Badge } from "$lib/components/ui/badge";
     import { Button } from "$lib/components/ui/button";
-    import { Activity, Server, Users, User, AlertCircle, Cpu, X, Bot, Loader2, Download, Trash2, Calendar, Clock, CheckCircle2 } from "lucide-svelte";
+    import { Activity, Server, Users, User, AlertCircle, Cpu, X, Bot, Loader2, Download, Trash2, Calendar, Clock, CheckCircle2, History } from "lucide-svelte";
     import { applyAction, deserialize } from '$app/forms';
     import { ScrollArea } from "$lib/components/ui/scroll-area";
     import { invalidateAll } from '$app/navigation';
@@ -21,6 +21,44 @@
     let sessionHistory = $state<DisplayMessage[]>([]);
     let isLoadingHistory = $state(false);
     let historyError = $state("");
+
+    let isEnrolling = $state<string | null>(null);
+    let enrollResult = $state<any>(null);
+    let enrollError = $state("");
+
+    async function enrollChannel(channel: string) {
+        isEnrolling = channel;
+        enrollResult = null;
+        enrollError = "";
+
+        const formData = new FormData();
+        formData.append('channel', channel);
+        formData.append('action', 'enroll');
+
+        try {
+            const response = await fetch('?/enrollChannel', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = deserialize(await response.text());
+            if (result.type === 'success' && result.data) {
+                const data = result.data as any;
+                if (data.error) {
+                    enrollError = data.error;
+                } else {
+                    enrollResult = data.result;
+                    console.log('Enrollment initiated:', enrollResult);
+                }
+            } else {
+                enrollError = "Failed to start enrollment";
+            }
+        } catch (e: any) {
+            enrollError = e.message || "An error occurred";
+        } finally {
+            isEnrolling = null;
+        }
+    }
 
     async function inspectSession(sessionId: string) {
         selectedSession = sessionId;
@@ -138,12 +176,12 @@
 
         <Card.Root>
             <Card.Header class="flex flex-row items-center justify-between pb-2">
-                <Card.Title class="text-sm font-medium">Total Humans</Card.Title>
-                <User class="h-4 w-4 text-muted-foreground" />
+                <Card.Title class="text-sm font-medium">Active Jobs</Card.Title>
+                <Calendar class="h-4 w-4 text-muted-foreground" />
             </Card.Header>
             <Card.Content>
-                <div class="text-2xl font-bold">{data.humans?.length || 0}</div>
-                <p class="text-xs text-muted-foreground mt-1">Identified human profiles</p>
+                <div class="text-2xl font-bold">{data.tasks?.length || 0}</div>
+                <p class="text-xs text-muted-foreground mt-1">Automated recurring jobs</p>
             </Card.Content>
         </Card.Root>
 
@@ -155,17 +193,6 @@
             <Card.Content>
                 <div class="text-2xl font-bold">{data.skills?.length || 0}</div>
                 <p class="text-xs text-muted-foreground mt-1">Available capabilities</p>
-            </Card.Content>
-        </Card.Root>
-
-        <Card.Root>
-            <Card.Header class="flex flex-row items-center justify-between pb-2">
-                <Card.Title class="text-sm font-medium">Scheduled Tasks</Card.Title>
-                <Calendar class="h-4 w-4 text-muted-foreground" />
-            </Card.Header>
-            <Card.Content>
-                <div class="text-2xl font-bold">{data.tasks?.length || 0}</div>
-                <p class="text-xs text-muted-foreground mt-1">Automated recurring tasks</p>
             </Card.Content>
         </Card.Root>
 
@@ -184,7 +211,7 @@
     <div class="grid gap-6 md:grid-cols-2 mb-8">
         <Card.Root>
             <Card.Header>
-                <Card.Title>Recurring Tasks</Card.Title>
+                <Card.Title>Recurring Jobs</Card.Title>
                 <Card.Description>Status of scheduled automation and background jobs.</Card.Description>
             </Card.Header>
             <Card.Content>
@@ -219,7 +246,7 @@
                     </div>
                 {:else}
                     <div class="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">
-                        No scheduled tasks found.
+                        No scheduled jobs found.
                     </div>
                 {/if}
             </Card.Content>
@@ -245,12 +272,61 @@
                                 </p>
                             </div>
                         </div>
-                        {#if data.config?.channels?.whatsapp?.enabled}
-                            <Badge variant="outline" class="bg-green-50 text-green-700 border-green-200">Active</Badge>
-                        {:else}
-                            <Badge variant="secondary">Inactive</Badge>
-                        {/if}
+                        <div class="flex items-center gap-2">
+                            {#if data.config?.channels?.whatsapp?.enabled}
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    disabled={isEnrolling === 'whatsapp'}
+                                    onclick={() => enrollChannel('whatsapp')}
+                                >
+                                    {#if isEnrolling === 'whatsapp'}
+                                        <Loader2 class="h-4 w-4 animate-spin mr-1" />
+                                    {/if}
+                                    Enrollment
+                                </Button>
+                                <Badge variant="outline" class="bg-green-50 text-green-700 border-green-200">Active</Badge>
+                            {:else}
+                                <Badge variant="secondary">Inactive</Badge>
+                            {/if}
+                        </div>
                     </div>
+
+                    {#if enrollResult || enrollError}
+                        <div class="p-3 border rounded-lg bg-muted/30 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="text-sm font-semibold flex items-center gap-1.5">
+                                    <Activity class="h-4 w-4 text-primary" />
+                                    Enrollment Result
+                                </h4>
+                                <Button variant="ghost" size="icon" class="h-6 w-6" onclick={() => { enrollResult = null; enrollError = ""; }}>
+                                    <X class="h-3 w-3" />
+                                </Button>
+                            </div>
+                            
+                            {#if enrollError}
+                                <p class="text-xs text-destructive bg-destructive/10 p-2 rounded">{enrollError}</p>
+                            {:else if enrollResult}
+                                <div class="space-y-2">
+                                    {#if enrollResult.message}
+                                        <p class="text-xs">{enrollResult.message}</p>
+                                    {/if}
+                                    
+                                    {#if enrollResult.qr || enrollResult.qr_code}
+                                        <div class="flex flex-col items-center bg-white p-4 rounded-lg border">
+                                            <p class="text-[10px] text-muted-foreground mb-2 uppercase tracking-wider font-bold">Scan with WhatsApp</p>
+                                            <!-- QR code could be a URL or data URI -->
+                                            <img src={enrollResult.qr || enrollResult.qr_code} alt="WhatsApp Enrollment QR" class="w-48 h-48" />
+                                        </div>
+                                    {:else}
+                                        <div class="bg-muted p-2 rounded font-mono text-[10px] overflow-auto max-h-32">
+                                            <pre>{JSON.stringify(enrollResult, null, 2)}</pre>
+                                        </div>
+                                    {/if}
+                                </div>
+                            {/if}
+                        </div>
+                    {/if}
 
                     <!-- IRC -->
                     <div class="flex items-center justify-between p-3 border rounded-lg bg-card/50">
@@ -277,8 +353,8 @@
 
         <Card.Root>
             <Card.Header>
-                <Card.Title>Active Sessions</Card.Title>
-                <Card.Description>Manage current conversation sessions.</Card.Description>
+                <Card.Title>Active Sessions & History</Card.Title>
+                <Card.Description>Manage current sessions and view message history.</Card.Description>
             </Card.Header>
             <Card.Content>
                 {#if data.sessions && data.sessions.length > 0}
@@ -295,11 +371,13 @@
                                     <Table.Cell class="font-mono text-xs">{sessionId}</Table.Cell>
                                     <Table.Cell class="text-right">
                                         <Button 
-                                            variant="ghost" 
+                                            variant="outline" 
                                             size="sm"
                                             onclick={() => inspectSession(sessionId)}
+                                            class="h-8 gap-1.5"
                                         >
-                                            Inspect
+                                            <History class="h-3.5 w-3.5" />
+                                            History
                                         </Button>
                                     </Table.Cell>
                                 </Table.Row>
@@ -309,37 +387,6 @@
                 {:else}
                     <div class="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">
                         No active sessions found.
-                    </div>
-                {/if}
-            </Card.Content>
-        </Card.Root>
-
-        <Card.Root>
-            <Card.Header>
-                <Card.Title>Stored Humans</Card.Title>
-                <Card.Description>Identified people in long-term memory.</Card.Description>
-            </Card.Header>
-            <Card.Content>
-                {#if data.humans && data.humans.length > 0}
-                    <Table.Root>
-                        <Table.Header>
-                            <Table.Row>
-                                <Table.Head>Profile Content</Table.Head>
-                            </Table.Row>
-                        </Table.Header>
-                                <Table.Body>
-                                    {#each data.humans as human}
-                                        <Table.Row>
-                                            <Table.Cell class="font-medium text-xs truncate max-w-[400px]">
-                                                {human.content || 'No information available'}
-                                            </Table.Cell>
-                                        </Table.Row>
-                                    {/each}
-                                </Table.Body>
-                    </Table.Root>
-                {:else}
-                    <div class="py-10 text-center text-muted-foreground border-2 border-dashed rounded-lg">
-                        No human profiles stored.
                     </div>
                 {/if}
             </Card.Content>

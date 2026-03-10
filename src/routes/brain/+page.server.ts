@@ -18,7 +18,7 @@ export interface BrainData {
 export const load: PageServerLoad = async ({ url }): Promise<BrainData> => {
     const sessionId = url.searchParams.get('session_id') || undefined;
     const page = parseInt(url.searchParams.get('page') || '1');
-    const pageSize = parseInt(url.searchParams.get('pageSize') || '12');
+    const pageSize = parseInt(url.searchParams.get('pageSize') || '50');
     const offset = (page - 1) * pageSize;
     
     const config = new Configuration({

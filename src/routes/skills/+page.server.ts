@@ -23,7 +23,7 @@ export const load: PageServerLoad = async (): Promise<SkillsData> => {
 
     try {
         const skillsRes = await defaultApi.apiAdminV1SkillsGet(100, 0);
-        const skills: Skill[] = (skillsRes.data.data as any) || [];
+        const skills: Skill[] = skillsRes.data.data || [];
 
         return {
             skills

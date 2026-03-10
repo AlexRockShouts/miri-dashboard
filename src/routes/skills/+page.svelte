@@ -50,8 +50,10 @@
             const result = deserialize(await response.text());
             if (result.type === 'success') {
                 await invalidateAll();
+            } else if (result.type === 'failure') {
+                alert(result.data?.error || "Failed to remove skill");
             } else {
-                alert("Failed to remove skill");
+                alert("An error occurred while removing the skill");
             }
         } catch (e) {
             console.error(e);

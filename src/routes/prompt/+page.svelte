@@ -3,17 +3,21 @@
 	import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import * as Card from "$lib/components/ui/card";
-    import { Send, User, Bot, AlertCircle, Loader2, History, ListTodo, Paperclip, X, Activity, Cpu, Lightbulb, Terminal, Brain, Zap } from "lucide-svelte";
+    import { Send, User, Bot, AlertCircle, Loader2, History, ListTodo, Paperclip, X, Activity, Cpu, Lightbulb, Terminal, Brain, Zap, UserCheck, Save } from "lucide-svelte";
     import { Badge } from "$lib/components/ui/badge";
     import { chatState } from "$lib/state/chat.svelte";
     import Markdown from "$lib/components/chat/markdown.svelte";
     import * as Popover from "$lib/components/ui/popover/index.js";
     import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
     import { buttonVariants } from "$lib/components/ui/button/index.js";
+    import { Textarea } from "$lib/components/ui/textarea";
 
     let scrollAreaElement = $state<HTMLElement | null>(null);
     let isHistoryOpen = $state(false);
     let isTasksOpen = $state(false);
+    let isHumanInfoOpen = $state(false);
+    let editingHumanInfo = $state("");
+    let isSavingHumanInfo = $state(false);
     let fileInput = $state<HTMLInputElement | null>(null);
 
     function scrollToBottom() {
@@ -26,7 +30,26 @@
         chatState.loadFromStorage();
         console.log('Prompt page mounted. Prompt history size:', chatState.promptHistory.length);
         chatState.connect();
+        chatState.fetchHumanInfo();
     });
+
+    $effect(() => {
+        if (isHumanInfoOpen && chatState.humanInfo !== null) {
+            editingHumanInfo = chatState.humanInfo;
+        }
+    });
+
+    async function handleSaveHumanInfo() {
+        isSavingHumanInfo = true;
+        try {
+            await chatState.saveHumanInfo(editingHumanInfo);
+            isHumanInfoOpen = false;
+        } catch (e) {
+            alert('Failed to save human info');
+        } finally {
+            isSavingHumanInfo = false;
+        }
+    }
 
     $effect(() => {
         if (chatState.messages.length) {
@@ -44,7 +67,7 @@
         setTimeout(scrollToBottom, 100);
     }
 
-    function handleFileChange(e: Event) {
+    async function handleFileChange(e: Event) {
         const target = e.target as HTMLInputElement;
         const files = target.files;
         if (files && files.length > 0) {
@@ -289,24 +312,28 @@
                                      status.type === 'tool' ? 'border-blue-400' : 
                                      status.type === 'tool_result' ? 'border-green-400' : 
                                      status.type === 'skill' ? 'border-purple-400' : 
+                                     status.type === 'human' ? 'border-pink-400' : 
                                      status.type === 'action' ? 'border-indigo-400' : 
                                      status.type === 'error' ? 'border-red-500' : 
                                      'border-slate-300'}">
-                                    <div class="flex items-center justify-between gap-2">
-                                        <div class="flex items-center gap-1.5">
-                                            {#if status.type === 'thought'}
-                                                <Lightbulb class="h-3 w-3 text-amber-500" />
-                                                <span class="text-[10px] font-bold uppercase tracking-tight text-amber-600">Thinking</span>
-                                            {:else if status.type === 'tool'}
-                                                <Terminal class="h-3 w-3 text-blue-500" />
-                                                <span class="text-[10px] font-bold uppercase tracking-tight text-blue-600">Using Tool</span>
-                                            {:else if status.type === 'tool_result'}
-                                                <Activity class="h-3 w-3 text-green-500" />
-                                                <span class="text-[10px] font-bold uppercase tracking-tight text-green-600">Tool Result</span>
-                                            {:else if status.type === 'skill'}
-                                                <Cpu class="h-3 w-3 text-purple-500" />
-                                                <span class="text-[10px] font-bold uppercase tracking-tight text-purple-600">Skill</span>
-                                            {:else if status.type === 'action'}
+                                   <div class="flex items-center justify-between gap-2">
+                                       <div class="flex items-center gap-1.5">
+                                           {#if status.type === 'thought'}
+                                               <Lightbulb class="h-3 w-3 text-amber-500" />
+                                               <span class="text-[10px] font-bold uppercase tracking-tight text-amber-600">Thinking</span>
+                                           {:else if status.type === 'tool'}
+                                               <Terminal class="h-3 w-3 text-blue-500" />
+                                               <span class="text-[10px] font-bold uppercase tracking-tight text-blue-600">Using Tool</span>
+                                           {:else if status.type === 'tool_result'}
+                                               <Activity class="h-3 w-3 text-green-500" />
+                                               <span class="text-[10px] font-bold uppercase tracking-tight text-green-600">Tool Result</span>
+                                           {:else if status.type === 'skill'}
+                                               <Cpu class="h-3 w-3 text-purple-500" />
+                                               <span class="text-[10px] font-bold uppercase tracking-tight text-purple-600">Skill</span>
+                                           {:else if status.type === 'human'}
+                                               <User class="h-3 w-3 text-pink-500" />
+                                               <span class="text-[10px] font-bold uppercase tracking-tight text-pink-600">Human info</span>
+                                           {:else if status.type === 'action'}
                                                 <Zap class="h-3 w-3 text-indigo-500" />
                                                 <span class="text-[10px] font-bold uppercase tracking-tight text-indigo-600">Action</span>
                                             {:else if status.type === 'usage'}

@@ -1,5 +1,6 @@
 import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
-import type { Message as MiriMessage, Session as MiriSession, PaginatedHistory } from '@miri/sdk';
+import { DefaultApi, Configuration } from '@miri/sdk';
+import type { Message as MiriMessage, Session as MiriSession, PaginatedHistory, Human } from '@miri/sdk';
 
 export interface Message {
     role: 'user' | 'assistant';
@@ -29,10 +30,52 @@ class ChatState {
     pendingFiles = $state<string[]>([]);
     isUploading = $state(false);
     statusMessages = $state<{type: string, content: string, timestamp: Date}[]>([]);
+    humanInfo = $state<string | null>(null);
+    isFetchingHumanInfo = $state(false);
 
     constructor() {
         if (typeof window !== 'undefined') {
             this.loadFromStorage();
+        }
+    }
+
+    private getApi() {
+        const config = new Configuration({
+            basePath: PUBLIC_MIRI_SERVER_URL,
+            baseOptions: {
+                headers: {
+                    'X-Server-Key': PUBLIC_MIRI_SERVER_KEY,
+                }
+            }
+        });
+        return new DefaultApi(config);
+    }
+
+    async fetchHumanInfo() {
+        this.isFetchingHumanInfo = true;
+        try {
+            const api = this.getApi();
+            const res = await api.apiAdminV1HumanGet();
+            this.humanInfo = res.data.content || "";
+        } catch (e) {
+            // Silently handle 404 as the endpoint might be removed in some server versions
+            // but we keep the logic as requested.
+            if ((e as any)?.response?.status !== 404) {
+                console.error('Failed to fetch human info:', e);
+            }
+        } finally {
+            this.isFetchingHumanInfo = false;
+        }
+    }
+
+    async saveHumanInfo(content: string) {
+        try {
+            const api = this.getApi();
+            await api.apiAdminV1HumanPost({ content });
+            this.humanInfo = content;
+        } catch (e) {
+            console.error('Failed to save human info:', e);
+            throw e;
         }
     }
 
@@ -173,6 +216,7 @@ class ChatState {
                           content.startsWith('[Tool:') || 
                           content.startsWith('[ToolResult:') ||
                           content.startsWith('[Skill:') ||
+                          content.startsWith('[Human:') ||
                           content.startsWith('[Action:');
             
             if (isMeta) {
@@ -192,6 +236,9 @@ class ChatState {
                 } else if (content.startsWith('[Skill:')) {
                     type = "skill";
                     cleanContent = content.replace('[Skill:', '').replace(/\]$/, '').trim();
+                } else if (content.startsWith('[Human:')) {
+                    type = "human";
+                    cleanContent = content.replace('[Human:', '').replace(/\]$/, '').trim();
                 } else if (content.startsWith('[Action:')) {
                     type = "action";
                     cleanContent = content.replace('[Action:', '').replace(/\]$/, '').trim();
