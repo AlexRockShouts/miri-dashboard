@@ -2,6 +2,7 @@
     import { marked } from 'marked';
     import dompurify from 'dompurify';
     import { codeToHtml } from 'shiki';
+    // @ts-ignore
     import renderMathInElement from 'katex/dist/contrib/auto-render.mjs';
     import 'katex/dist/katex.min.css';
 
@@ -221,7 +222,6 @@
         margin-bottom: 0;
     }
     :global(.markdown-content code) {
-        background-color: rgba(0, 0, 0, 0.05);
         padding: 0.1rem 0.3rem;
         border-radius: 0.25rem;
         font-family: monospace;

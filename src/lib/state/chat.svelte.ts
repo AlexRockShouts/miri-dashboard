@@ -1,6 +1,8 @@
 import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
-import { DefaultApi, Configuration } from '@miri/sdk';
-import type { Message as MiriMessage, Session as MiriSession, PaginatedHistory, Human } from '@miri/sdk';
+import { DefaultApi, Configuration, ApiV1InteractionPostRequestActionEnum, SpawnSubAgentRequestRoleEnum } from '@miri/sdk';
+import type { Message as MiriMessage, Session as MiriSession, PaginatedHistory, Human, FileInfo, ApiAdminV1SessionsIdStatsGet200Response } from '@miri/sdk';
+
+console.log('ChatState file loaded at:', new Date().toISOString(), 'with PUBLIC_MIRI_SERVER_URL:', PUBLIC_MIRI_SERVER_URL);
 
 export interface Message {
     role: 'user' | 'assistant';
@@ -14,12 +16,24 @@ export interface TaskMessage {
     timestamp: Date;
 }
 
+export interface AgentMessage {
+    id: string;
+    name: string;
+    role?: string;
+    status: 'running' | 'completed' | 'failed';
+    message: string;
+    result?: string;
+    timestamp: Date;
+    color?: string;
+}
+
 class ChatState {
     socket: WebSocket | null = $state(null);
     sessionId = $state("");
     inputMessage = $state("");
     messages = $state<Message[]>([]);
     taskMessages = $state<TaskMessage[]>([]);
+    agentMessages = $state<AgentMessage[]>([]);
     isConnected = $state(false);
     isWaiting = $state(false);
     isStreaming = $state(false);
@@ -30,8 +44,26 @@ class ChatState {
     pendingFiles = $state<string[]>([]);
     isUploading = $state(false);
     statusMessages = $state<{type: string, content: string, timestamp: Date}[]>([]);
+    lastCompletedAgentId = $state<string | null>(null);
     humanInfo = $state<string | null>(null);
     isFetchingHumanInfo = $state(false);
+    files = $state<FileInfo[]>([]);
+    currentPath = $state<string | null>(null);
+    isFetchingFiles = $state(false);
+    sessionStats = $state<ApiAdminV1SessionsIdStatsGet200Response | null>(null);
+    isFetchingStats = $state(false);
+    _activeTab = $state<"chat" | "files">("chat");
+
+    get activeTab() {
+        return this._activeTab;
+    }
+
+    set activeTab(val: "chat" | "files") {
+        this._activeTab = val;
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('miri_active_tab', val);
+        }
+    }
 
     constructor() {
         if (typeof window !== 'undefined') {
@@ -40,15 +72,37 @@ class ChatState {
     }
 
     private getApi() {
-        const config = new Configuration({
-            basePath: PUBLIC_MIRI_SERVER_URL,
-            baseOptions: {
-                headers: {
-                    'X-Server-Key': PUBLIC_MIRI_SERVER_KEY,
+        try {
+            const config = new Configuration({
+                basePath: PUBLIC_MIRI_SERVER_URL,
+                apiKey: PUBLIC_MIRI_SERVER_KEY,
+                password: PUBLIC_MIRI_SERVER_KEY, // Basic Auth often uses key as password
+                baseOptions: {
+                    headers: {
+                        'X-Server-Key': PUBLIC_MIRI_SERVER_KEY,
+                    }
                 }
+            });
+            const api = new DefaultApi(config);
+            
+            // Log outgoing requests for visibility
+            const axiosInstance = (api as any).axios || (api as any).axiosInstance;
+            if (axiosInstance && !axiosInstance.interceptors.request.handlers.length) {
+                axiosInstance.interceptors.request.use((config: any) => {
+                    console.log(`API [${config.method?.toUpperCase()}] ${config.url}`, {
+                        params: config.params,
+                        data: config.data,
+                        headers: config.headers
+                    });
+                    return config;
+                });
             }
-        });
-        return new DefaultApi(config);
+
+            return api;
+        } catch (err) {
+            console.error('Failed to initialize API client:', err);
+            throw err;
+        }
     }
 
     async fetchHumanInfo() {
@@ -79,12 +133,215 @@ class ChatState {
         }
     }
 
+    async fetchFiles(path?: string | null) {
+        this.isFetchingFiles = true;
+        // If path is explicitly null or a string, update currentPath.
+        // If path is undefined (e.g. refresh or onMount), keep existing currentPath.
+        if (path !== undefined) {
+            this.currentPath = path || null;
+        }
+        
+        try {
+            // Normalize path: avoid leading slash as it might cause 403 or 404 on some servers
+            let fetchPath = this.currentPath || undefined;
+            if (fetchPath && fetchPath.startsWith('/')) {
+                fetchPath = fetchPath.substring(1);
+            }
+            
+            console.log('ChatState: fetchFiles calling apiV1FilesGet with path:', fetchPath || 'root');
+            const api = this.getApi();
+            const res = await api.apiV1FilesGet(fetchPath);
+            console.log('ChatState: apiV1FilesGet returned:', res.status, res.data);
+            
+            if (res.data && Array.isArray(res.data.files)) {
+                this.files = res.data.files;
+            } else if (Array.isArray(res.data)) {
+                // Fallback if SDK type is wrong and it returns array directly
+                this.files = res.data;
+            } else if (res.data && (res.data as any).file_info) {
+                // Single file info returned
+                this.files = [(res.data as any).file_info];
+            } else if (res.data && (res.data as any).data && Array.isArray((res.data as any).data)) {
+                // Another common pattern: { data: [...] }
+                this.files = (res.data as any).data;
+            } else {
+                console.warn('ChatState: apiV1FilesGet returned unexpected data structure:', res.data);
+                this.files = [];
+            }
+            
+            // Normalize file objects to ensure isDir and name exist
+            this.files = this.files.map(f => {
+                if (f && typeof f === 'object') {
+                    // Normalize path: some APIs return full path, some only name.
+                    // We want name to be the basename.
+                    const originalName = f.name || (f as any).filename || (f as any).path?.split('/').pop() || 'unnamed';
+                    f.name = originalName;
+
+                    // Property fallbacks for isDir
+                    if (f.isDir === undefined) {
+                        (f as any).isDir = (f as any).is_dir || (f as any).is_directory || (f as any).type === 'directory';
+                    }
+                }
+                return f;
+            });
+            
+            console.log('ChatState: this.files updated with:', this.files.length, 'items');
+            
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('miri_files', JSON.stringify(this.files));
+                if (this.currentPath) {
+                    localStorage.setItem('miri_current_path', this.currentPath);
+                } else {
+                    localStorage.removeItem('miri_current_path');
+                }
+            }
+            
+            if (this.sessionId) {
+                this.fetchSessionStats();
+            }
+        } catch (e: any) {
+            console.error('ChatState: Failed to fetch files:', e);
+        } finally {
+            this.isFetchingFiles = false;
+        }
+    }
+
+    goUp() {
+        if (!this.currentPath) return;
+        
+        const parts = this.currentPath.split('/').filter(Boolean);
+        if (parts.length <= 1) {
+            this.fetchFiles(null);
+        } else {
+            parts.pop();
+            this.fetchFiles(parts.join('/'));
+        }
+    }
+
+    async fetchSessionStats() {
+        if (!this.sessionId) return;
+        this.isFetchingStats = true;
+        try {
+            const api = this.getApi();
+            const res = await api.apiAdminV1SessionsIdStatsGet(this.sessionId);
+            this.sessionStats = res.data;
+        } catch (e) {
+            console.error('Failed to fetch session stats:', e);
+        } finally {
+            this.isFetchingStats = false;
+        }
+    }
+
+    async sendStatusInteraction() {
+        try {
+            const api = this.getApi();
+            await api.apiV1InteractionPost({
+                action: ApiV1InteractionPostRequestActionEnum.Status
+            });
+        } catch (e) {
+            console.error('Failed to send status interaction:', e);
+        }
+    }
+
+    async downloadFile(name: string, isDir: boolean = false) {
+        try {
+            const api = this.getApi();
+            // Ensure path is clean (no double slashes, no leading slash)
+            let fullPath = this.currentPath ? `${this.currentPath}/${name}` : name;
+            fullPath = fullPath.replace(/\/+/g, '/').replace(/^\//, '');
+            
+            console.log(`[ChatState] Downloading ${isDir ? 'directory' : 'file'}: ${fullPath}`);
+            
+            // Note: SDK's apiV1FilesFilepathGet uses encodeURIComponent for the filepath,
+            // which encodes slashes as %2F. If the server expects raw slashes, 
+            // this might fail for nested files.
+            const response = await api.apiV1FilesFilepathGet(fullPath, false, isDir, {
+                responseType: 'blob'
+            } as any);
+
+            const responseData = response.data as any;
+            console.log(`[ChatState] Received ${isDir ? 'directory' : 'file'} data, size: ${responseData.size || responseData.length || 'unknown'}, type: ${responseData.type || typeof responseData}`);
+            
+            const blob = new Blob([responseData], { type: isDir ? 'application/zip' : 'application/octet-stream' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            
+            let downloadName = name;
+            if (isDir && !downloadName.toLowerCase().endsWith('.zip')) {
+                downloadName = `${downloadName}.zip`;
+            }
+            link.setAttribute('download', downloadName);
+            
+            document.body.appendChild(link);
+            link.click();
+            
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            console.log(`[ChatState] Download started for: ${fullPath}${isDir ? ' as ZIP' : ''}`);
+        } catch (error: any) {
+            console.error(`[ChatState] Error downloading ${isDir ? 'directory' : 'file'}:`, error);
+            if (error.response) {
+                console.error("[ChatState] Error response data:", error.response.data);
+                console.error("[ChatState] Error response status:", error.response.status);
+            }
+        }
+    }
+
+    async deleteFile(name: string) {
+        try {
+            const api = this.getApi();
+            // Ensure path is clean
+            let fullPath = this.currentPath ? `${this.currentPath}/${name}` : name;
+            fullPath = fullPath.replace(/\/+/g, '/').replace(/^\//, '');
+            
+            console.log(`[ChatState] Deleting file: ${fullPath}`);
+            
+            await api.apiV1FilesDelete({ path: fullPath });
+            this.files = this.files.filter(f => f.name !== name);
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('miri_files', JSON.stringify(this.files));
+            }
+            console.log(`[ChatState] File deleted successfully: ${fullPath}`);
+        } catch (e: any) {
+            console.error('Failed to delete file:', e, name);
+            if (e.response) {
+                console.error("[ChatState] Delete error response data:", e.response.data);
+                console.error("[ChatState] Delete error response status:", e.response.status);
+            }
+            throw e;
+        }
+    }
+
+    async createNewAgent(role: SpawnSubAgentRequestRoleEnum, goal: string, model?: string) {
+        try {
+            const api = this.getApi();
+            const res = await api.apiV1SubagentsPost({
+                role,
+                goal,
+                model,
+                parent_session: this.sessionId || undefined
+            });
+            console.log('Created new agent:', res.data);
+            return res.data;
+        } catch (e) {
+            console.error('Failed to create new agent:', e);
+            throw e;
+        }
+    }
+
     loadFromStorage() {
-        if (typeof window === 'undefined') return;
+        if (typeof window === 'undefined') {
+            console.log('ChatState: loadFromStorage called on server - skipping');
+            return;
+        }
         
         console.log('ChatState: Loading from storage');
         this.sessionId = localStorage.getItem('miri_session_id') || "";
-        console.log('ChatState: Loaded sessionId:', this.sessionId);
+        this._activeTab = (localStorage.getItem('miri_active_tab') as "chat" | "files") || "chat";
+        this.currentPath = localStorage.getItem('miri_current_path');
+        console.log('ChatState: Loaded sessionId:', this.sessionId, 'activeTab:', this._activeTab, 'currentPath:', this.currentPath);
 
         try {
             const savedMessages = localStorage.getItem('miri_chat_messages');
@@ -93,10 +350,32 @@ class ChatState {
                 if (Array.isArray(parsed)) {
                     this.messages = parsed;
                     console.log('ChatState: Loaded messages:', this.messages.length, 'items');
+                    
+                    // Update currentAssistantMessage if last message is from assistant
+                    if (this.messages.length > 0 && this.messages[this.messages.length - 1].role === 'assistant') {
+                        this.currentAssistantMessage = this.messages[this.messages.length - 1].content;
+                    }
+                } else {
+                    console.warn('ChatState: savedMessages is not an array:', parsed);
                 }
+            } else {
+                console.log('ChatState: No saved messages found in localStorage');
             }
         } catch (e) {
             console.error('ChatState: Failed to load chat messages:', e);
+        }
+
+        try {
+            const savedFiles = localStorage.getItem('miri_files');
+            if (savedFiles) {
+                const parsed = JSON.parse(savedFiles);
+                if (Array.isArray(parsed)) {
+                    this.files = parsed;
+                    console.log('ChatState: Loaded files from storage:', this.files.length, 'items');
+                }
+            }
+        } catch (e) {
+            console.error('ChatState: Failed to load files from storage:', e);
         }
 
         try {
@@ -127,6 +406,22 @@ class ChatState {
         } catch (e) {
             console.error('ChatState: Failed to load task messages:', e);
         }
+
+        try {
+            const savedAgents = localStorage.getItem('miri_agent_messages');
+            if (savedAgents) {
+                const parsed = JSON.parse(savedAgents);
+                if (Array.isArray(parsed)) {
+                    this.agentMessages = parsed.map((t: any) => ({
+                        ...t,
+                        timestamp: new Date(t.timestamp)
+                    }));
+                    console.log('ChatState: Loaded agentMessages:', this.agentMessages.length, 'items');
+                }
+            }
+        } catch (e) {
+            console.error('ChatState: Failed to load agent messages:', e);
+        }
     }
 
     savePromptToHistory(prompt: string) {
@@ -152,58 +447,156 @@ class ChatState {
 
     saveMessagesToStorage() {
         if (typeof window !== 'undefined') {
+            console.log('ChatState: Saving messages to localStorage. Count:', this.messages.length);
             localStorage.setItem('miri_chat_messages', JSON.stringify(this.messages));
+        } else {
+            console.log('ChatState: saveMessagesToStorage called on server - skipping');
         }
     }
 
     processMessage(data: string) {
         if (!data) return;
         
+        // Handle raw [DONE] signal from some streaming implementations
+        if (data === "[DONE]") {
+            console.log('ChatState: Received [DONE] signal');
+            this.isStreaming = false;
+            if (this.isNewCommandPending) {
+                this.resetState();
+            }
+            return;
+        }
+
         let content = "";
         try {
-            const parsed = JSON.parse(data);
+            const parsed = typeof data === 'string' && (data.startsWith('{') || data.startsWith('[')) 
+                ? JSON.parse(data) 
+                : null;
             
-            // Persist session ID if provided by server
-            if (parsed.session_id && parsed.session_id !== this.sessionId) {
-                this.sessionId = parsed.session_id;
-                if (typeof window !== 'undefined') {
-                    localStorage.setItem('miri_session_id', this.sessionId);
+            if (parsed) {
+                // Persist session ID if provided by server
+                if (parsed.session_id && parsed.session_id !== this.sessionId) {
+                    console.log('ChatState: Updating sessionId from server:', parsed.session_id);
+                    this.sessionId = parsed.session_id;
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('miri_session_id', this.sessionId);
+                    }
+                    // Fetch stats for the newly received session ID
+                    this.fetchSessionStats();
                 }
-            }
 
-            // Check for task reports
-            if (parsed.source === "task") {
-                const newTask: TaskMessage = {
-                    id: parsed.task_id || Math.random().toString(36).substring(7),
-                    name: parsed.task_name || "Unknown Task",
-                    message: parsed.response || "",
-                    timestamp: new Date()
-                };
-                
-                // Add to list and keep only last 20
-                this.taskMessages = [...this.taskMessages, newTask].slice(-20);
-                
-                if (typeof window !== 'undefined') {
-                    localStorage.setItem('miri_task_messages', JSON.stringify(this.taskMessages));
+                // Check for task reports
+                if (parsed.source === "task") {
+                    const newTask: TaskMessage = {
+                        id: parsed.task_id || Math.random().toString(36).substring(7),
+                        name: parsed.task_name || "Unknown Task",
+                        message: parsed.response || "",
+                        timestamp: new Date()
+                    };
+                    
+                    // Add to list and keep only last 20
+                    this.taskMessages = [...this.taskMessages, newTask].slice(-20);
+                    
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('miri_task_messages', JSON.stringify(this.taskMessages));
+                    }
+                    return;
                 }
-                return;
-            }
-            
-            if (parsed.content) {
-                content = parsed.content;
-            } else if (parsed.response) {
-                content = parsed.response;
-            } else if (parsed.done || parsed.status === "done") {
-                this.isStreaming = false;
-                if (this.isNewCommandPending) {
-                    this.resetState();
+
+                // Check for agent reports
+                if (parsed.source === "agent") {
+                    const message = parsed.response || parsed.content || "";
+                    const result = parsed.result || "";
+                    const role = parsed.role || "generic";
+                    
+                    const roleColors: Record<string, string> = {
+                        'researcher': 'text-blue-600 bg-blue-50 border-blue-100',
+                        'coder': 'text-purple-600 bg-purple-50 border-purple-100',
+                        'reviewer': 'text-teal-600 bg-teal-50 border-teal-100',
+                        'generic': 'text-indigo-600 bg-indigo-50 border-indigo-100',
+                        'manager': 'text-orange-600 bg-orange-50 border-orange-100',
+                        'architect': 'text-pink-600 bg-pink-50 border-pink-100'
+                    };
+
+                    const colors = [
+                        'text-blue-600 bg-blue-50 border-blue-100',
+                        'text-purple-600 bg-purple-50 border-purple-100',
+                        'text-indigo-600 bg-indigo-50 border-indigo-100',
+                        'text-pink-600 bg-pink-50 border-pink-100',
+                        'text-orange-600 bg-orange-50 border-orange-100',
+                        'text-teal-600 bg-teal-50 border-teal-100',
+                        'text-cyan-600 bg-cyan-50 border-cyan-100'
+                    ];
+
+                    const agentId = parsed.agent_id || Math.random().toString(36).substring(7);
+                    
+                    // Add or update agent message
+                    const existingIndex = this.agentMessages.findIndex(a => a.id === agentId);
+                    
+                    let color = roleColors[role.toLowerCase()] || colors[this.agentMessages.length % colors.length];
+                    if (existingIndex >= 0) {
+                        color = this.agentMessages[existingIndex].color || color;
+                    }
+
+                    const newAgent: AgentMessage = {
+                        id: agentId,
+                        name: parsed.agent_name || "Unknown Agent",
+                        role: role,
+                        status: parsed.status || 'running',
+                        message: message,
+                        result: result,
+                        timestamp: new Date(),
+                        color: color
+                    };
+                    
+                    if (existingIndex >= 0) {
+                        const previousStatus = this.agentMessages[existingIndex].status;
+                        // Update: if newAgent.result is empty, keep existing result
+                        const updatedAgent = { ...newAgent };
+                        if (!updatedAgent.result && this.agentMessages[existingIndex].result) {
+                            updatedAgent.result = this.agentMessages[existingIndex].result;
+                        }
+                        this.agentMessages[existingIndex] = updatedAgent;
+
+                        // Trigger notification if status changed to completed
+                        if (previousStatus === 'running' && updatedAgent.status === 'completed') {
+                            console.log('ChatState: Agent completed:', updatedAgent.id);
+                            this.lastCompletedAgentId = updatedAgent.id;
+                        }
+                    } else {
+                        this.agentMessages = [...this.agentMessages, newAgent].slice(-20);
+                        if (newAgent.status === 'completed') {
+                             this.lastCompletedAgentId = newAgent.id;
+                        }
+                    }
+                    
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('miri_agent_messages', JSON.stringify(this.agentMessages));
+                    }
+                    return;
                 }
-                return;
-            } else if (typeof parsed === 'string') {
-                content = parsed;
-            } else if (parsed.error) {
-                console.error('Server error:', parsed.error);
-                content = `Error: ${parsed.error}`;
+                
+                if (parsed.content) {
+                    content = parsed.content;
+                } else if (parsed.response) {
+                    content = parsed.response;
+                } else if (parsed.done || parsed.status === "done") {
+                    this.isStreaming = false;
+                    if (this.isNewCommandPending) {
+                        this.resetState();
+                    }
+                    // Fetch stats after completion
+                    this.fetchSessionStats();
+                    return;
+                } else if (parsed.error) {
+                    console.error('Server error:', parsed.error);
+                    content = `Error: ${parsed.error}`;
+                } else if (typeof parsed === 'string') {
+                    content = parsed;
+                }
+            } else {
+                // Not JSON, use as raw content
+                content = data;
             }
         } catch (e) {
             // Fallback for non-JSON or malformed data
@@ -405,30 +798,19 @@ class ChatState {
         
         this.isUploading = true;
         try {
-            const formData = new FormData();
-            formData.append('file', file);
+            const api = this.getApi();
+            const res = await api.apiV1FilesUploadPost(file);
+            const data = res.data;
             
-            let serverUrl = PUBLIC_MIRI_SERVER_URL;
-            if (serverUrl.endsWith('/')) {
-                serverUrl = serverUrl.slice(0, -1);
-            }
-            
-            const res = await fetch(`${serverUrl}/api/v1/files/upload`, {
-                method: 'POST',
-                headers: {
-                    'X-Server-Key': PUBLIC_MIRI_SERVER_KEY
-                },
-                body: formData
-            });
-            
-            if (!res.ok) {
-                throw new Error(`Upload failed: ${res.status} ${res.statusText}`);
-            }
-            
-            const data = await res.json();
-            if (data.path) {
+            if (data.filename) {
                 this.pendingFiles.push(data.filename);
                 console.log('File uploaded and added to pending list:', data.filename, 'as path:', data.path);
+                
+                // Automatically refresh the files list after a successful upload
+                // to ensure the File Manager view is up-to-date.
+                this.fetchFiles();
+            } else {
+                console.error('File upload succeeded but no filename was returned in response:', data);
             }
         } catch (e) {
             console.error('File upload failed:', e);
@@ -488,9 +870,19 @@ class ChatState {
         this.messages = [];
         this.currentAssistantMessage = "";
         this.sessionId = ""; // Clear session ID to start truly fresh
+        this.statusMessages = []; // Clear status messages too
+        this.files = []; // Clear files too
+        this.currentPath = null;
+        this._activeTab = "chat";
+        
         if (typeof window !== 'undefined') {
             localStorage.removeItem('miri_chat_messages');
             localStorage.removeItem('miri_session_id');
+            localStorage.removeItem('miri_task_messages');
+            localStorage.removeItem('miri_agent_messages');
+            localStorage.removeItem('miri_active_tab');
+            localStorage.removeItem('miri_files');
+            console.log('ChatState: Cleared all chat-related localStorage items');
         }
         
         // Reconnect to get a new session
