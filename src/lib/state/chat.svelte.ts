@@ -76,7 +76,8 @@ class ChatState {
             const config = new Configuration({
                 basePath: PUBLIC_MIRI_SERVER_URL,
                 apiKey: PUBLIC_MIRI_SERVER_KEY,
-                password: PUBLIC_MIRI_SERVER_KEY, // Basic Auth often uses key as password
+                username: 'admin', // Default for Basic Auth
+                password: PUBLIC_MIRI_SERVER_KEY, // Use server key as password if no other password
                 baseOptions: {
                     headers: {
                         'X-Server-Key': PUBLIC_MIRI_SERVER_KEY,
@@ -225,8 +226,12 @@ class ChatState {
             const api = this.getApi();
             const res = await api.apiAdminV1SessionsIdStatsGet(this.sessionId);
             this.sessionStats = res.data;
-        } catch (e) {
+        } catch (e: any) {
             console.error('Failed to fetch session stats:', e);
+            if (e.response) {
+                console.error("[ChatState] Stats error response data:", e.response.data);
+                console.error("[ChatState] Stats error response status:", e.response.status);
+            }
         } finally {
             this.isFetchingStats = false;
         }

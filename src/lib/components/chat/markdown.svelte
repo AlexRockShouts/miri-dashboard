@@ -13,12 +13,12 @@
     // Customize headers to look better in chat - making them clear and readable
     renderer.heading = ({ text, depth }) => {
         const sizes = [
-            'text-lg font-bold mt-4 mb-2',
-            'text-base font-bold mt-3 mb-1.5',
-            'text-sm font-semibold mt-2 mb-1',
-            'text-sm font-medium mt-2 mb-1',
-            'text-sm font-medium mt-2 mb-1',
-            'text-sm font-medium mt-2 mb-1',
+            'text-base font-bold mt-4 mb-2',
+            'text-sm font-bold mt-3 mb-1.5',
+            'text-xs font-semibold mt-2 mb-1',
+            'text-xs font-medium mt-2 mb-1',
+            'text-xs font-medium mt-2 mb-1',
+            'text-xs font-medium mt-2 mb-1',
         ];
         const sizeClass = sizes[depth - 1] || 'font-semibold';
         return `<h${depth} class="${sizeClass}">${text}</h${depth}>`;
@@ -67,7 +67,7 @@
     renderer.code = ({ text, lang }) => {
         const id = `code-block-${blockCounter++}`;
         codeBlocks.set(id, JSON.stringify({ text, lang }));
-        return `<div id="${id}" class="shiki-placeholder my-4 rounded-md overflow-hidden shadow-sm"><pre class="p-3 bg-muted/30"><code class="language-${lang || ''} text-sm">${text}</code></pre></div>`;
+        return `<div id="${id}" class="shiki-placeholder my-4 rounded-md overflow-hidden shadow-sm"><pre class="p-3 bg-muted/30"><code class="language-${lang || ''} text-xs">${text}</code></pre></div>`;
     };
 
     // Use an extension to protect math delimiters from marked
@@ -168,7 +168,8 @@
                             {left: '\\(', right: '\\)', display: false},
                             {left: '\\[', right: '\\]', display: true}
                         ],
-                        throwOnError: false
+                        throwOnError: false,
+                        strict: 'ignore'
                     });
                 }
 

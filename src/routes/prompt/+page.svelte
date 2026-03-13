@@ -299,7 +299,7 @@
 </script>
 
 <style>
-    :global(.user-markdown p) {
+    :global(.user-markdown p, .assistant-markdown p) {
         margin-bottom: 0.25rem !important;
     }
     :global(.status-markdown p, .task-markdown p, .agent-markdown p) {
@@ -339,19 +339,6 @@
             </div>
         {/if}
         <div class="flex items-center gap-2">
-            <Button 
-                variant="outline" 
-                size="sm" 
-                class="gap-2 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive transition-colors"
-                onclick={() => {
-                    if (window.confirm("Are you sure you want to clear the chat? This will reset the current session.")) {
-                        chatState.resetState();
-                    }
-                }}
-            >
-                <Trash2 class="h-4 w-4" />
-                Clear Chat
-            </Button>
             <Popover.Root bind:open={isNewAgentOpen}>
                 <Popover.Trigger class={buttonVariants({ variant: "outline", size: "sm" }) + " gap-2 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 transition-colors"}>
                     <Zap class="h-4 w-4" />
@@ -630,17 +617,21 @@
 
                 {#each chatState.messages as message}
                     <div class="flex {message.role === 'user' ? 'justify-end' : 'justify-start'}">
-                        <div class="flex gap-3 w-full {message.role === 'user' ? 'flex-row-reverse max-w-[80%] ml-auto' : 'flex-row'}">
-                            <div class="h-8 w-8 rounded-full flex items-center justify-center shrink-0 
-                                {message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted border'}">
+                        <div class="flex flex-col w-full {message.role === 'user' ? 'max-w-[85%] ml-auto items-end' : 'max-w-[95%] mr-auto items-start'}">
+                            <div class="flex items-center gap-2 mb-1 px-1">
                                 {#if message.role === 'user'}
-                                    <User class="h-4 w-4" />
+                                    <span class="text-[10px] font-bold uppercase tracking-tight text-primary/70 italic">You</span>
+                                    <User class="h-3 w-3 text-primary/70" />
                                 {:else}
-                                    <Bot class="h-4 w-4" />
+                                    <Bot class="h-3 w-3 text-slate-500" />
+                                    <span class="text-[10px] font-bold uppercase tracking-tight text-slate-600 italic">Miri</span>
                                 {/if}
                             </div>
-                            <div class="rounded-2xl px-4 py-2 text-sm shadow-sm flex-1
-                                {message.role === 'user' ? 'bg-primary text-primary-foreground user-markdown' : 'bg-card border'}">
+                            
+                            <div class="w-full rounded-lg px-4 py-3 text-xs shadow-sm border-l-2
+                                {message.role === 'user' 
+                                    ? 'bg-primary/5 border-primary/40 user-markdown' 
+                                    : 'bg-card border-slate-300 assistant-markdown'}">
                                 <Markdown content={message.content} />
                             </div>
                         </div>
@@ -649,12 +640,14 @@
 
                 {#if chatState.isWaiting}
                     <div class="flex justify-start">
-                        <div class="flex gap-3 w-full flex-row">
-                            <div class="h-8 w-8 rounded-full flex items-center justify-center shrink-0 bg-muted border">
-                                <Bot class="h-4 w-4" />
+                        <div class="flex flex-col w-full max-w-[95%] mr-auto items-start">
+                            <div class="flex items-center gap-2 mb-1 px-1">
+                                <Bot class="h-3 w-3 text-slate-500" />
+                                <span class="text-[10px] font-bold uppercase tracking-tight text-slate-600 italic">Miri</span>
                             </div>
-                            <div class="rounded-2xl px-4 py-3 bg-card border shadow-sm">
-                                <div class="flex gap-1">
+                            
+                            <div class="w-full rounded-lg px-4 py-3 bg-card border border-l-2 border-slate-300 shadow-sm text-xs">
+                                <div class="flex gap-1 py-1">
                                     <div class="w-1.5 h-1.5 bg-foreground/50 rounded-full animate-bounce"></div>
                                     <div class="w-1.5 h-1.5 bg-foreground/50 rounded-full animate-bounce [animation-delay:0.2s]"></div>
                                     <div class="w-1.5 h-1.5 bg-foreground/50 rounded-full animate-bounce [animation-delay:0.4s]"></div>
@@ -715,7 +708,7 @@
                         placeholder={chatState.isConnected ? "Type your prompt here..." : chatState.useSSE ? "Type your prompt here (via SSE)..." : "Connecting..."}
                         bind:value={chatState.inputMessage}
                         disabled={chatState.isWaiting}
-                        autocomplete="off"
+                        class="text-xs"
                     />
 
                     <Popover.Root bind:open={isHistoryOpen}>
@@ -749,6 +742,21 @@
                             </ScrollArea>
                         </Popover.Content>
                     </Popover.Root>
+
+                    <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="icon" 
+                        class="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        title="Clear Chat"
+                        onclick={() => {
+                            if (window.confirm("Are you sure you want to clear the chat? This will reset the current session.")) {
+                                chatState.resetState();
+                            }
+                        }}
+                    >
+                        <Trash2 class="h-4 w-4" />
+                    </Button>
                 </div>
                 <Button type="submit" size="icon" disabled={chatState.isWaiting || (!chatState.inputMessage.trim() && chatState.pendingFiles.length === 0)}>
                     <Send class="h-4 w-4" />
