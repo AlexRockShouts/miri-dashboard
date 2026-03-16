@@ -19,6 +19,7 @@
     import { buttonVariants } from "$lib/components/ui/button";
     import { Textarea } from "$lib/components/ui/textarea";
     import { Label } from "$lib/components/ui/label";
+    import { PUBLIC_ACTIVITY_LEVEL } from '$env/static/public';
 
     let scrollAreaElement = $state<HTMLElement | null>(null);
     let isHistoryOpen = $state(false);
@@ -32,8 +33,9 @@
    	let lastNotifiedAgentId = $state<string | null>(null);
    	let showAgentNotification = $state(false);
    	let completedAgent = $state<any>(null);
-   	let isSidebarCollapsed = $state(true);
-   	let isStatusSidebarCollapsed = $state(false);
+    let isSidebarCollapsed = $state(true);
+    let isDebugActivity = PUBLIC_ACTIVITY_LEVEL === 'DEBUG';
+    let isStatusSidebarCollapsed = $state(!isDebugActivity);
 
     // New Agent state
     let isNewAgentOpen = $state(false);
@@ -538,19 +540,6 @@
                     Disconnected
                 </Badge>
             {/if}
-
-            {#if chatState.sessionId}
-                <Button 
-                    variant="outline" 
-                    size="sm" 
-                    class="gap-2" 
-                    href="/brain?session_id={chatState.sessionId}"
-                    title="View reasoning topology for this session"
-                >
-                    <Brain class="h-4 w-4" />
-                    <span class="hidden sm:inline">Brain</span>
-                </Button>
-            {/if}
         </div>
     </header>
 
@@ -969,9 +958,11 @@
                                            </div>
                                            <span class="text-[9px] text-muted-foreground whitespace-nowrap">{status.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</span>
                                        </div>
-                                       <div class="text-xs leading-relaxed text-foreground/80 break-words status-markdown">
-                                           <Markdown content={status.content} />
-                                       </div>
+                                       {#if isDebugActivity}
+                                           <div class="text-xs leading-relaxed text-foreground/80 break-words status-markdown">
+                                               <Markdown content={status.content} />
+                                           </div>
+                                       {/if}
                                    </div>
                                 {/each}
                             {/if}
