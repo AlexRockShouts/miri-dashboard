@@ -1,6 +1,5 @@
 import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
-import { DefaultApi, Configuration, ApiV1InteractionPostRequestActionEnum, SpawnSubAgentRequestRoleEnum } from '@miri/sdk';
-import type { Message as MiriMessage, Session as MiriSession, PaginatedHistory, Human, FileInfo, ApiAdminV1SessionsIdStatsGet200Response } from '@miri/sdk';
+import { DefaultApi, Configuration, ApiV1InteractionPostRequestActionEnum, SpawnSubAgentRequestRoleEnum, type Config, type FileInfo, type ApiAdminV1SessionsIdStatsGet200Response, type Message as MiriMessage, type Session as MiriSession, type PaginatedHistory, type Human } from '@miri/sdk';
 
 console.log('ChatState file loaded at:', new Date().toISOString(), 'with PUBLIC_MIRI_SERVER_URL:', PUBLIC_MIRI_SERVER_URL);
 
@@ -73,14 +72,25 @@ class ChatState {
 
     private getApi() {
         try {
+            // In development, prioritize .env credentials if available via SvelteKit's public variables
+            // or use standard fallbacks.
+            const user = 'admin';
+            const pass = PUBLIC_MIRI_SERVER_KEY;
+
+            // Encode basic auth credentials
+            const basicAuth = btoa(`${user}:${pass}`);
+            console.log(`[ChatState] getApi: using user=${user}, pass=${pass.substring(0, 3)}..., auth=${basicAuth.substring(0, 10)}...`);
+            console.log(`[ChatState] getApi: URL=${PUBLIC_MIRI_SERVER_URL}, ServerKey=${PUBLIC_MIRI_SERVER_KEY}`);
+            
             const config = new Configuration({
                 basePath: PUBLIC_MIRI_SERVER_URL,
                 apiKey: PUBLIC_MIRI_SERVER_KEY,
-                username: 'admin', // Default for Basic Auth
-                password: PUBLIC_MIRI_SERVER_KEY, // Use server key as password if no other password
+                username: user,
+                password: pass,
                 baseOptions: {
                     headers: {
                         'X-Server-Key': PUBLIC_MIRI_SERVER_KEY,
+                        'Authorization': `Basic ${basicAuth}`
                     }
                 }
             });
@@ -122,6 +132,7 @@ class ChatState {
             this.isFetchingHumanInfo = false;
         }
     }
+
 
     async saveHumanInfo(content: string) {
         try {

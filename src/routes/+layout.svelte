@@ -3,7 +3,7 @@
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { Button } from "$lib/components/ui/button";
-	import { MessageSquare, LayoutDashboard, Cpu, Brain as BrainIcon, Layers } from "lucide-svelte";
+	import { MessageSquare, LayoutDashboard, Cpu, Brain as BrainIcon, Layers, Settings } from "lucide-svelte";
 	import { page } from "$app/state";
 
 	onMount(() => {
@@ -51,6 +51,15 @@
 				>
 					<LayoutDashboard class="h-4 w-4" />
 					Admin
+				</Button>
+				<Button
+					variant={page.url.pathname.startsWith('/config') ? "default" : "ghost"}
+					size="sm"
+					class="gap-2"
+					href="/config"
+				>
+					<Settings class="h-4 w-4" />
+					Configuration
 				</Button>
 				<Button
 					variant={page.url.pathname.startsWith('/skills') ? "default" : "ghost"}
