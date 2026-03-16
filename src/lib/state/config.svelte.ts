@@ -1,4 +1,3 @@
-import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY, PUBLIC_MIRI_ADMIN_USER, PUBLIC_MIRI_ADMIN_PASSWORD } from '$env/static/public';
 import { DefaultApi, Configuration, type Config, type ProviderConfig, type ModelConfig } from '@alexrockshouts/miri-sdk';
 
 export class ConfigState {
@@ -6,23 +5,25 @@ export class ConfigState {
     isFetchingConfig = $state(false);
 
     private getApi() {
-        const user = PUBLIC_MIRI_ADMIN_USER ?? 'admin';
-        const pass = PUBLIC_MIRI_ADMIN_PASSWORD ?? 'admin-password';
+        const serverUrl = (import.meta.env.PUBLIC_MIRI_SERVER_URL as string) ?? '';
+        const serverKey = (import.meta.env.PUBLIC_MIRI_SERVER_KEY as string) ?? '';
+        const user = (import.meta.env.PUBLIC_MIRI_ADMIN_USER as string) ?? 'admin';
+        const pass = (import.meta.env.PUBLIC_MIRI_ADMIN_PASSWORD as string) ?? 'admin-password';
         const basicAuth = btoa(`${user}:${pass}`);
 
-        console.log(`[ConfigState] Using URL: ${PUBLIC_MIRI_SERVER_URL}`);
-        console.log(`[ConfigState] Using Server Key: ${PUBLIC_MIRI_SERVER_KEY}`);
+        console.log(`[ConfigState] Using URL: ${serverUrl}`);
+        console.log(`[ConfigState] Using Server Key: ${serverKey}`);
         console.log(`[ConfigState] Using User: ${user}`);
         console.log(`[ConfigState] Using Password: ${pass}`);
 
         const config = new Configuration({
-            basePath: PUBLIC_MIRI_SERVER_URL,
-            apiKey: PUBLIC_MIRI_SERVER_KEY,
+            basePath: serverUrl,
+            apiKey: serverKey,
             username: user,
             password: pass,
             baseOptions: {
                 headers: {
-                    'X-Server-Key': PUBLIC_MIRI_SERVER_KEY,
+                    'X-Server-Key': serverKey,
                     'Authorization': `Basic ${basicAuth}`
                 }
             }

@@ -19,7 +19,8 @@
     import { buttonVariants } from "$lib/components/ui/button";
     import { Textarea } from "$lib/components/ui/textarea";
     import { Label } from "$lib/components/ui/label";
-    import { PUBLIC_ACTIVITY_LEVEL } from '$env/static/public';
+
+    const PUBLIC_ACTIVITY_LEVEL = import.meta.env.PUBLIC_ACTIVITY_LEVEL ?? 'INFO';
 
     let scrollAreaElement = $state<HTMLElement | null>(null);
     let isHistoryOpen = $state(false);
