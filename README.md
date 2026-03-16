@@ -10,7 +10,7 @@ The Miri Dashboard provides a streamlined interface for both developers and user
 - **Admin Dashboard**: Real-time overview of server health, active sessions, stored human profiles, and system configuration.
 - **Reactive Prompt**: A modern chat interface using **WebSockets** for low-latency, streaming responses from the Miri agent.
 - **Modern Stack**: Built with SvelteKit, Tailwind CSS 4, and shadcn-svelte for a premium look and feel.
-- **SDK Powered**: Built directly on top of the `@miri/sdk` for reliable communication with the Miri API.
+- **SDK Powered**: Built directly on top of the `@alexrockshouts/miri-sdk` for reliable communication with the Miri API.
 
 ## 🏗️ Architecture
 
@@ -19,7 +19,7 @@ The project follows a modern decoupled architecture:
 1.  **Frontend (SvelteKit)**: A server-rendered (SSR) and client-hydrated application that handles all UI logic and state management.
 2.  **Styling (Tailwind CSS 4)**: Uses the latest Tailwind 4 engine with the `@tailwindcss/vite` plugin for lightning-fast builds and modern CSS features.
 3.  **UI Components (shadcn-svelte)**: High-quality, accessible UI components customized for the Miri aesthetic.
-4.  **SDK Integration**: Communicates with the Miri server via a locally-linked TypeScript SDK (`@miri/sdk`).
+4.  **SDK Integration**: Communicates with the Miri server via the `@alexrockshouts/miri-sdk` TypeScript SDK.
     -   **Admin Data**: Fetched server-side via `+page.server.ts` using the SDK's `Api` client.
     -   **Prompt Streaming**: Handles real-time communication via WebSockets directly from the browser.
 
@@ -31,13 +31,31 @@ The project follows a modern decoupled architecture:
 
 ## ⚙️ Configuration
 
-### Local SDK Setup
-The project currently expects the `@miri/sdk` to be located at:
-`../../GolandProjects/miri-main/api/sdk/typescript`
+### Local SDK Setup (Development)
 
-If your SDK is in a different location, you must update two files:
-1.  `package.json`: Update the `dependencies["@miri/sdk"]` path.
-2.  `vite.config.ts`: Update the `server.fs.allow` path to permit Vite to access the symlinked SDK source.
+Follow these steps for local development with SDK changes:
+
+1. **Build & link SDK:**
+   ```
+   cd /path/to/miri-main/api/sdk/typescript  # e.g., /Users/mirjamagento/GolandProjects/miri-main/api/sdk/typescript
+   npm run build
+   npm link
+   ```
+
+2. **Link in dashboard:**
+   ```
+   cd /path/to/miri-dashboard  # e.g., /Users/mirjamagento/WebstormProjects/miri-dashboard
+   npm link @alexrockshouts/miri-sdk
+   npm install
+   ```
+
+**Propagate changes:** Edit SDK → `npm run build` (SDK) → `npm install` (dashboard) or restart dev server.
+
+**Unlink:** `npm unlink @alexrockshouts/miri-sdk` (dashboard), `npm unlink` (SDK).
+
+### Release / CI / Docker
+- Publish SDK: `make ts-sdk-publish` or `npm publish` from SDK dir.
+- Dashboard: `npm ci` or `npm install` pulls from npm (^1.0.0).
 
 ### Server URL & Authentication
 The dashboard uses SvelteKit environment variables for configuration. Copy the example file to get started:

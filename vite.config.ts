@@ -4,9 +4,5 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
 	plugins: [sveltekit(), tailwindcss()],
-	server: {
-		fs: {
-			allow: ['/Users/mirjamagento/GolandProjects/miri-main/api/sdk/typescript']
-		}
-	}
+	server: {}
 });

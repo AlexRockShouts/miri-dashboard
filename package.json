@@ -34,7 +34,7 @@
 		"vite": "^6.2.0"
 	},
 	"dependencies": {
-		"@miri/sdk": "file:../../GolandProjects/miri-main/api/sdk/typescript",
+		"@alexrockshouts/miri-sdk": "^1.0.0",
 		"katex": "^0.16.33",
 		"shiki": "^4.0.1"
 	}

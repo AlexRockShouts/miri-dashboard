@@ -1,5 +1,5 @@
 import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
-import { DefaultApi, Configuration, ApiV1InteractionPostRequestActionEnum, SpawnSubAgentRequestRoleEnum, type Config, type FileInfo, type ApiAdminV1SessionsIdStatsGet200Response, type Message as MiriMessage, type Session as MiriSession, type PaginatedHistory, type Human } from '@miri/sdk';
+import { DefaultApi, Configuration, ApiV1InteractionPostRequestActionEnum, SpawnSubAgentRequestRoleEnum, type Config, type FileInfo, type ApiAdminV1SessionsIdStatsGet200Response, type Message as MiriMessage, type Session as MiriSession, type PaginatedHistory, type Human } from '@alexrockshouts/miri-sdk';
 
 console.log('ChatState file loaded at:', new Date().toISOString(), 'with PUBLIC_MIRI_SERVER_URL:', PUBLIC_MIRI_SERVER_URL);
 

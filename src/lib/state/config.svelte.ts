@@ -1,5 +1,5 @@
 import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY, PUBLIC_MIRI_ADMIN_USER, PUBLIC_MIRI_ADMIN_PASSWORD } from '$env/static/public';
-import { DefaultApi, Configuration, type Config, type ProviderConfig, type ModelConfig } from '@miri/sdk';
+import { DefaultApi, Configuration, type Config, type ProviderConfig, type ModelConfig } from '@alexrockshouts/miri-sdk';
 
 export class ConfigState {
     config = $state<Config | null>(null);

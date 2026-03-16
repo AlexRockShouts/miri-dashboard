@@ -1,4 +1,4 @@
-import { DefaultApi, Configuration } from '@miri/sdk';
+import { DefaultApi, Configuration } from '@alexrockshouts/miri-sdk';
 import type { 
     Config, 
     Human, 
@@ -7,7 +7,7 @@ import type {
     Task, 
     PaginatedHistory,
     ApiAdminV1HealthGet200Response
-} from '@miri/sdk';
+} from '@alexrockshouts/miri-sdk';
 const PUBLIC_MIRI_SERVER_URL = process.env.PUBLIC_MIRI_SERVER_URL ?? '';
 const PUBLIC_MIRI_SERVER_KEY = process.env.PUBLIC_MIRI_SERVER_KEY ?? '';
 const MIRI_ADMIN_USER = process.env.MIRI_ADMIN_USER ?? '';
