@@ -1,7 +1,9 @@
 import { DefaultApi, Configuration } from '@miri/sdk';
 import type { Skill } from '@miri/sdk';
-import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
-import { MIRI_ADMIN_USER, MIRI_ADMIN_PASSWORD } from '$env/static/private';
+const PUBLIC_MIRI_SERVER_URL = process.env.PUBLIC_MIRI_SERVER_URL ?? '';
+const PUBLIC_MIRI_SERVER_KEY = process.env.PUBLIC_MIRI_SERVER_KEY ?? '';
+const MIRI_ADMIN_USER = process.env.MIRI_ADMIN_USER ?? '';
+const MIRI_ADMIN_PASSWORD = process.env.MIRI_ADMIN_PASSWORD ?? '';
 import type { PageServerLoad } from './$types';
 
 export interface SkillsData {
