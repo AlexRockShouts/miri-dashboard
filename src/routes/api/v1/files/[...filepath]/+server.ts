@@ -1,4 +1,4 @@
-import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/static/public';
+import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/dynamic/public';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
