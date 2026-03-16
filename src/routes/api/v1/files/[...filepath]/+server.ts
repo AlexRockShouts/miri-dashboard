@@ -1,4 +1,6 @@
-import { PUBLIC_MIRI_SERVER_URL, PUBLIC_MIRI_SERVER_KEY } from '$env/dynamic/public';
+// Server env vars from process.env (avoids build-time checks)
+const PUBLIC_MIRI_SERVER_URL = process.env.PUBLIC_MIRI_SERVER_URL ?? '';
+const PUBLIC_MIRI_SERVER_KEY = process.env.PUBLIC_MIRI_SERVER_KEY ?? '';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
