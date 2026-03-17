@@ -34,7 +34,7 @@
 		"vite": "^6.2.0"
 	},
 	"dependencies": {
-		"@alexrockshouts/miri-sdk": "^1.0.3",
+		"@alexrockshouts/miri-sdk": "^0.0.1",
 		"katex": "^0.16.33",
 		"shiki": "^4.0.1"
 	}
